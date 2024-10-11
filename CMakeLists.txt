@@ -1,6 +1,6 @@
 cmake_minimum_required ( VERSION 3.28 )
 include(cmake/AddFile.cmake)
-project(RT_project LANGUAGES CXX)
+project(RT_project LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)

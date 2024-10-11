@@ -9,7 +9,10 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
+#include <semaphore>
 #include <string>
+#include <thread>
+#include <array>
 #include "sdl_wrapper.hpp"
 #include "rtweekend.h"
 
@@ -22,7 +25,22 @@
 #include "sphere.h"
 #include "texture.h"
 
-
+struct MainRendererComm{
+    std::binary_semaphore frame_start_render{0};
+    std::binary_semaphore frame_rendered{0};
+    std::atomic<bool> stop_render{false};
+};
+MainRendererComm mainRendererComm{};
+void initialize_main_sync_objs(){
+    {
+        mainRendererComm.frame_start_render.try_acquire();
+        mainRendererComm.frame_rendered.release();
+        mainRendererComm.stop_render.store(false);
+    }
+}
+void notify_renderer_exit(){
+    mainRendererComm.stop_render.store(true);
+}
 
 void cornell_box() {
     hittable_list world;
@@ -119,9 +137,7 @@ hittable_list final_scene_build() {
     return world;
 }
 
-void final_scene(int image_width, int samples_per_pixel, int max_depth) {
-    hittable_list world = final_scene_build();
-
+camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
     camera cam;
 
     cam.aspect_ratio      = 1.0;
@@ -134,51 +150,57 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
     cam.lookfrom = point3(478, 278, -600);
     cam.lookat   = point3(278, 278, 0);
     cam.vup      = vec3(0,1,0);
-
-    cam.render(world);
+    return cam;
 }
 
-void final_scene_realtime(int image_width, int samples_per_pixel, int max_depth) {
-    hittable_list world = final_scene_build();
+void render_scene(hittable_list &scene, camera &cam) {
+    cam.render(scene);
+}
 
-    camera cam;
+void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
+    while (!mainRendererComm.stop_render.load()) {
+        mainRendererComm.frame_start_render.acquire();
+        cam.render(scene, image);
+        mainRendererComm.frame_rendered.release();
+    }
+}
 
-    cam.aspect_ratio      = 1.0;
-    cam.image_width       = image_width;
-    cam.samples_per_pixel = samples_per_pixel;
-    cam.max_depth         = max_depth;
-    cam.background        = color(0,0,0);
-
-    cam.vfov     = 40;
-    cam.lookfrom = point3(478, 278, -600);
-    cam.lookat   = point3(278, 278, 0);
-    cam.vup      = vec3(0,1,0);
-    std::shared_ptr<sdl_raii::SDL> sdl{};
-    int height = int(image_width/cam.aspect_ratio);
-    auto window = sdl_raii::Window{"theNextWeek", image_width, height};
+void render_scene_realtime(hittable_list &scene, camera &cam) {
+    int height = int(cam.image_width/cam.aspect_ratio);
+    auto window = sdl_raii::Window{"theNextWeek", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
-    sdl_raii::Surface surface{image_width, height};
+    auto surface = sdl_raii::Surface{cam.image_width, height};
+    auto image = std::span<unsigned int>{(unsigned int*)surface.get()->pixels, (size_t)cam.image_width*height};
+    auto render_th = std::thread{render_thread, std::ref(cam), std::ref(scene), image};
+    mainRendererComm.frame_start_render.release();
+    auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl())
     {
-        auto t0 = std::chrono::steady_clock::now();
-        cam.render(world, {(unsigned int*)surface.get()->pixels, (size_t )image_width*height});
-        //update_surface_cuda(surface.get(), gpuImgPtr);
-        //ray_trace_cuda(surface.get(), gpuImgPtr, gpuCameraPtr, scene_objs.size(), gpuScenePtr);
-        auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
-        SDL_RenderClear(renderer.get());
-        SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
-        SDL_RenderPresent(renderer.get());
-        auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
-        utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
+        if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
+            auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
+            SDL_RenderClear(renderer.get());
+            SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
+            SDL_RenderPresent(renderer.get());
+            auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
+            mainRendererComm.frame_start_render.release();
+            t0 = std::chrono::steady_clock::now();
+        }
     }
+    notify_renderer_exit();
+    render_th.join();
 }
 
 
 int main(int argc, char* argv[]) {
+    sdl_raii::SDL sdl{};
+    initialize_main_sync_objs();
+    auto scene = final_scene_build();
+    auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
-        final_scene(400,   250,  4);
+        render_scene(scene, cam);
     } else {
-        final_scene_realtime(400,   50,  4);
+        render_scene_realtime(scene, cam);
     }
     return 0;
 }
