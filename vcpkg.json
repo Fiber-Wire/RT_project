@@ -1,0 +1,21 @@
+{
+  "name" : "rt-project",
+  "version-string" : "0.0.1",
+  "builtin-baseline" : "49ac2134b31b95b0ddf29d56873dcd24392691df",
+  "dependencies" : [
+    {
+      "name" : "sdl2"
+    }, {
+      "name" : "glm"
+    }, {
+      "name" : "stb"
+    }, {
+      "name": "fastgltf"
+    } ],
+  "overrides": [
+    {
+      "name":  "sdl2",
+      "version": "2.30.8#0"
+    }
+  ]
+}
