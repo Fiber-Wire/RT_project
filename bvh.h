@@ -27,11 +27,11 @@ class bvh_node : public hittable {
         // persist the resulting bounding volume hierarchy.
     }
 
-    bvh_node(std::vector<shared_ptr<hittable>>& objects, size_t start, size_t end) {
+    bvh_node(std::vector<hittable>& objects, size_t start, size_t end) {
         // Build the bounding box of the span of source objects.
         bbox = aabb::empty;
         for (size_t object_index=start; object_index < end; object_index++)
-            bbox = aabb(bbox, objects[object_index]->bounding_box());
+            bbox = aabb(bbox, objects[object_index].bounding_box());
 
         int axis = bbox.longest_axis();
 
@@ -42,16 +42,27 @@ class bvh_node : public hittable {
         size_t object_span = end - start;
 
         if (object_span == 1) {
-            left = right = objects[start];
+            left = right = &objects[start];
         } else if (object_span == 2) {
-            left = objects[start];
-            right = objects[start+1];
+            left = &objects[start];
+            right = &objects[start+1];
         } else {
             std::sort(std::begin(objects) + start, std::begin(objects) + end, comparator);
 
             auto mid = start + object_span/2;
-            left = make_shared<bvh_node>(objects, start, mid);
-            right = make_shared<bvh_node>(objects, mid, end);
+            left_owned = true;
+            right_owned = true;
+            left = new bvh_node{objects, start, mid};
+            right = new bvh_node{objects, mid, end};
+        }
+    }
+
+    ~bvh_node() override {
+        if (left_owned) {
+            delete left;
+        }
+        if (right_owned) {
+            delete right;
         }
     }
 
@@ -68,27 +79,29 @@ class bvh_node : public hittable {
     aabb bounding_box() const override { return bbox; }
 
   private:
-    shared_ptr<hittable> left;
-    shared_ptr<hittable> right;
+    hittable* left;
+    bool left_owned{false};
+    hittable* right;
+    bool right_owned{false};
     aabb bbox;
 
     static bool box_compare(
-        const shared_ptr<hittable> a, const shared_ptr<hittable> b, int axis_index
+        const hittable* a, const hittable* b, int axis_index
     ) {
         auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
         auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
         return a_axis_interval.min < b_axis_interval.min;
     }
 
-    static bool box_x_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b) {
+    static bool box_x_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 0);
     }
 
-    static bool box_y_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b) {
+    static bool box_y_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 1);
     }
 
-    static bool box_z_compare (const shared_ptr<hittable> a, const shared_ptr<hittable> b) {
+    static bool box_z_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 2);
     }
 };
