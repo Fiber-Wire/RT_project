@@ -94,7 +94,7 @@ void cornell_box() {
 
 
 hittable_list final_scene_build() {
-    hittable_list boxes1;
+    hittable_list boxes1{};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 20;
@@ -114,10 +114,10 @@ hittable_list final_scene_build() {
         }
     }
 
-    hittable_list world;
+    hittable_list world{};
     std::vector<material*> objects;
 
-    auto bvh_node_boxes1 = new bvh_node(boxes1);
+    auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
 
     auto light = new diffuse_light(color(7, 7, 7));
@@ -179,7 +179,7 @@ void render_scene(hittable_list &scene, camera &cam) {
 void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
         mainRendererComm.frame_start_render.acquire();
-        cam.render(scene, image);
+        cam.render_parallel(scene, image);
         mainRendererComm.frame_rendered.release();
     }
 }
@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
     auto scene = final_scene_build();
-    auto cam = final_camera(100, 5, 2);
+    auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);
     } else {

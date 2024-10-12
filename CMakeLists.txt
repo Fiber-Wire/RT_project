@@ -41,7 +41,7 @@ target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 
 add_custom_file(RT_project images/earthmap.jpg images/earthmap.jpg)
 
-if (1)
+if (0)
     if(MSVC)
         target_compile_options(RT_project PRIVATE /fsanitize=address)
         target_link_options(RT_project PRIVATE /fsanitize=address)

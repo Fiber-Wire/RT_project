@@ -51,19 +51,41 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
+    unsigned int render_pixel(const hittable &world, int j, int i) {
+        color pixel_color(0,0,0);
+        for (int sample = 0; sample < samples_per_pixel; sample++) {
+            ray r = get_ray(i, j);
+            pixel_color += ray_color(r, max_depth, world);
+        }
+        return pixel_from_color(pixel_samples_scale * pixel_color);
+    }
+
     void render(const hittable& world, std::span<unsigned int> image) {
         initialize();
 
         for (int j = 0; j < image_height; j++) {
             utils::log<utils::LogLevel::eVerbose>(std::string{"Scanlines remaining: "}+std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
-                color pixel_color(0,0,0);
-                for (int sample = 0; sample < samples_per_pixel; sample++) {
-                    ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, max_depth, world);
-                }
-                image[i+j*image_width] = pixel_from_color(pixel_samples_scale * pixel_color);
+                image[i+j*image_width] = render_pixel(world, j, i);
             }
+        }
+    }
+
+    void render_parallel(const hittable& world, std::span<unsigned int> image) {
+        initialize();
+        int num_threads = std::thread::hardware_concurrency();
+        std::vector<std::thread> threads{};
+        for (auto tId = 0; tId < num_threads; tId++) {
+            threads.emplace_back([=, &image, &world]() {
+                for (int j = tId; j < image_height; j+=num_threads) {
+                    for (int i = 0; i < image_width; i++) {
+                        image[i+j*image_width] = render_pixel(world, j, i);
+                    }
+                }
+            });
+        }
+        for (auto& t : threads) {
+            t.join();
         }
     }
 
