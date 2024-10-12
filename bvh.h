@@ -27,11 +27,11 @@ class bvh_node : public hittable {
         // persist the resulting bounding volume hierarchy.
     }
 
-    bvh_node(std::vector<hittable>& objects, size_t start, size_t end) {
+    bvh_node(std::vector<hittable*>& objects, size_t start, size_t end) {
         // Build the bounding box of the span of source objects.
         bbox = aabb::empty;
         for (size_t object_index=start; object_index < end; object_index++)
-            bbox = aabb(bbox, objects[object_index].bounding_box());
+            bbox = aabb(bbox, objects[object_index]->bounding_box());
 
         int axis = bbox.longest_axis();
 
@@ -42,28 +42,53 @@ class bvh_node : public hittable {
         size_t object_span = end - start;
 
         if (object_span == 1) {
-            left = right = &objects[start];
+            left = right = objects[start];
         } else if (object_span == 2) {
-            left = &objects[start];
-            right = &objects[start+1];
+            left = objects[start];
+            right = objects[start+1];
         } else {
             std::sort(std::begin(objects) + start, std::begin(objects) + end, comparator);
 
             auto mid = start + object_span/2;
-            left_owned = true;
-            right_owned = true;
+            left_bvh = true;
+            right_bvh = true;
             left = new bvh_node{objects, start, mid};
             right = new bvh_node{objects, mid, end};
         }
     }
 
     ~bvh_node() override {
-        if (left_owned) {
+        if (left_bvh) {
             delete left;
+            left_bvh = false;
         }
-        if (right_owned) {
+        if (right_bvh) {
             delete right;
+            right_bvh = false;
         }
+    }
+
+    bvh_node(const bvh_node& other) {
+        *this = other;
+    }
+
+    bvh_node& operator=(const bvh_node& other) {
+        if (this != &other) {
+            bbox = other.bbox;
+            left = other.left;
+            right = other.right;
+            if (other.left_bvh) {
+                left = new bvh_node{{}};
+                *left = *other.left;
+                left_bvh = true;
+            }
+            if (other.right_bvh) {
+                right = new bvh_node{{}};
+                *right = *other.right;
+                right_bvh = true;
+            }
+        }
+        return *this;
     }
 
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
@@ -79,10 +104,10 @@ class bvh_node : public hittable {
     aabb bounding_box() const override { return bbox; }
 
   private:
-    hittable* left;
-    bool left_owned{false};
-    hittable* right;
-    bool right_owned{false};
+    hittable* left{};
+    bool left_bvh{false};
+    hittable* right{};
+    bool right_bvh{false};
     aabb bbox;
 
     static bool box_compare(
