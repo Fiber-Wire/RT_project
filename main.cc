@@ -160,7 +160,6 @@ hittable_list debug_scene_build() {
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 2;
-    //////// vector<hittable*> all_boxes3
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
             auto w = 800.0;
@@ -177,45 +176,17 @@ hittable_list debug_scene_build() {
     }
 
     hittable_list world{};
-    //std::vector<material*> objects;
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
 
     auto light = new diffuse_light(color(7, 7, 7));
-    //auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
     world.add(new sphere{point3{123, 554, 147}, 100, light});
-    //world.add(quad_light_1);
 
     auto dielectric_sphere = new dielectric(1.5);
     auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
     world.add(dielectric_sphere_1);
 
-    // auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
-    // auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
-    // world.add(metal_sphere_1);
-    //
-    // auto dielectric_ground = new dielectric(1.5);
-    // auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
-    // world.add(dielectric_ground_1);
-    //
-    // auto image_texture_emat = new image_texture("earthmap.jpg") ;
-    // auto lambertian_emat = new lambertian(image_texture_emat);
-    // auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
-    // world.add(lambertian_emat_sphere_1);
-    //
-    // hittable_list boxes2;
-    // auto white = new lambertian(color(.73, .73, .73));
-    // int ns = 1000;
-    // for (int j = 0; j < ns; j++) {
-    //     auto boxes2_sphere = new sphere(point3::random(0, 165), 10, white);
-    //     boxes2.add(boxes2_sphere);
-    // }
-    //
-    // auto bvh_node_box = new bvh_node(boxes2);
-    // auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
-    // auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
-    // world.add(bvh_node_box_translate);
     return world;
 }
 
@@ -241,15 +212,16 @@ void render_scene(const hittable_list &scene, camera &cam) {
 
 void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
-        mainRendererComm.frame_start_render.acquire();
-        cam.render_parallel(scene, image);
-        mainRendererComm.frame_rendered.release();
+        if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
+            cam.render_parallel(scene, image);
+            mainRendererComm.frame_rendered.release();
+        }
     }
 }
 
 void render_scene_realtime(hittable_list &scene, camera &cam) {
     int height = int(cam.image_width/cam.aspect_ratio);
-    auto window = sdl_raii::Window{"theNextWeek", cam.image_width, height};
+    auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
     auto surface = sdl_raii::Surface{cam.image_width, height};
     auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
@@ -285,7 +257,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
-    auto scene = final_scene_build();
+    auto scene = debug_scene_build();
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);

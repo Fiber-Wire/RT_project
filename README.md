@@ -7,6 +7,8 @@ A primitive ray-tracer written in CUDA.
 Forked from [Ray Tracing: The Next Week](https://raytracing.github.io/books/RayTracingTheNextWeek.html) 
 with minimal modifications to provide a baseline.
 
+![reference.png](reference.png)
+
 ## How-to
 
 ### Build

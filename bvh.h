@@ -41,6 +41,7 @@ class bvh_node : public hittable {
 
         size_t object_span = end - start;
 
+        // TODO: add bvh_node detection, or split scene and bvh altogether
         if (object_span == 1) {
             left = right = objects[start];
         } else if (object_span == 2) {
