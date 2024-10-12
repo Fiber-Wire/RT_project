@@ -34,7 +34,7 @@ class hittable_list : public hittable {
             for (int i = 0; i < objects.size(); i++) {
                 if (are_hitlist[i]) {
                     objects[i] = new hittable_list{};
-                    *objects[i] = *other.objects[i];
+                    *dynamic_cast<hittable_list*>(objects[i]) = *dynamic_cast<hittable_list*>(other.objects[i]);
                 }
             }
         }

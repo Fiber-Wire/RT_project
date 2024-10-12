@@ -89,7 +89,7 @@ class quad : public hittable {
 };
 
 
-inline hittable_list* box(const point3& a, const point3& b, material* mat)
+inline hittable_list* create_box(const point3& a, const point3& b, material* mat)
 {
     // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
 

@@ -66,12 +66,12 @@ void cornell_box() {
     world.add(quad_5);
     world.add(quad_6);
 
-    hittable_list* box1 = box(point3(0,0,0), point3(165,330,165), white);
+    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white);
     auto box1_rotate = new rotate_y(box1,15);
     auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
     world.add(box1_translate);
 
-    hittable_list* box2 = box(point3(0,0,0), point3(165,165,165), white);
+    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white);
     auto box2_rotate = new rotate_y(box2, -18);
     auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
     world.add(box2_translate);
@@ -109,13 +109,12 @@ hittable_list final_scene_build() {
             auto y1 = random_double(1,101);
             auto z1 = z0 + w;
 
-            auto box3 = box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
             boxes1.add(box3);
         }
     }
 
     hittable_list world{};
-    std::vector<material*> objects;
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
@@ -156,6 +155,70 @@ hittable_list final_scene_build() {
     return world;
 }
 
+hittable_list debug_scene_build() {
+    hittable_list boxes1{};
+    auto ground = new lambertian(color(0.48, 0.83, 0.53));
+
+    int boxes_per_side = 2;
+    //////// vector<hittable*> all_boxes3
+    for (int i = 0; i < boxes_per_side; i++) {
+        for (int j = 0; j < boxes_per_side; j++) {
+            auto w = 800.0;
+            auto x0 = -1000.0 + i*w;
+            auto z0 = -1000.0 + j*w;
+            auto y0 = 0.0;
+            auto x1 = x0 + w;
+            auto y1 = random_double(1,101);
+            auto z1 = z0 + w;
+
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
+            boxes1.add(box3);
+        }
+    }
+
+    hittable_list world{};
+    //std::vector<material*> objects;
+
+    auto bvh_node_boxes1 = new bvh_node{boxes1};
+    world.add(bvh_node_boxes1);
+
+    auto light = new diffuse_light(color(7, 7, 7));
+    //auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
+    world.add(new sphere{point3{123, 554, 147}, 100, light});
+    //world.add(quad_light_1);
+
+    auto dielectric_sphere = new dielectric(1.5);
+    auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
+    world.add(dielectric_sphere_1);
+
+    // auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
+    // auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
+    // world.add(metal_sphere_1);
+    //
+    // auto dielectric_ground = new dielectric(1.5);
+    // auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
+    // world.add(dielectric_ground_1);
+    //
+    // auto image_texture_emat = new image_texture("earthmap.jpg") ;
+    // auto lambertian_emat = new lambertian(image_texture_emat);
+    // auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
+    // world.add(lambertian_emat_sphere_1);
+    //
+    // hittable_list boxes2;
+    // auto white = new lambertian(color(.73, .73, .73));
+    // int ns = 1000;
+    // for (int j = 0; j < ns; j++) {
+    //     auto boxes2_sphere = new sphere(point3::random(0, 165), 10, white);
+    //     boxes2.add(boxes2_sphere);
+    // }
+    //
+    // auto bvh_node_box = new bvh_node(boxes2);
+    // auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
+    // auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
+    // world.add(bvh_node_box_translate);
+    return world;
+}
+
 camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
     camera cam;
 
@@ -172,7 +235,7 @@ camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
     return cam;
 }
 
-void render_scene(hittable_list &scene, camera &cam) {
+void render_scene(const hittable_list &scene, camera &cam) {
     cam.render(scene);
 }
 

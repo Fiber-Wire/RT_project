@@ -79,12 +79,12 @@ class bvh_node : public hittable {
             right = other.right;
             if (other.left_bvh) {
                 left = new bvh_node{{}};
-                *left = *other.left;
+                *dynamic_cast<bvh_node*>(left) = *dynamic_cast<bvh_node*>(other.left);
                 left_bvh = true;
             }
             if (other.right_bvh) {
                 right = new bvh_node{{}};
-                *right = *other.right;
+                *dynamic_cast<bvh_node*>(right) = *dynamic_cast<bvh_node*>(other.right);
                 right_bvh = true;
             }
         }
