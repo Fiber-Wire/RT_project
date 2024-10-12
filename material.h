@@ -39,6 +39,21 @@ class lambertian : public material {
     }
     lambertian(texture* tex) : tex(tex) {}
 
+    lambertian(const lambertian& other) {
+        *this = other;
+    }
+
+    lambertian& operator=(const lambertian& other) {
+        if (this != &other) {
+            tex = other.tex;
+            if (tex == &other.color_tex) {
+                color_tex = other.color_tex;
+                tex = &color_tex;
+            }
+        }
+        return *this;
+    }
+
     bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
         auto scatter_direction = rec.normal + random_unit_vector();
@@ -127,6 +142,20 @@ class diffuse_light : public material {
     color emitted(double u, double v, const point3& p) const override {
         return tex->value(u, v, p);
     }
+    diffuse_light(const diffuse_light& other) {
+        *this = other;
+    }
+
+    diffuse_light& operator=(const diffuse_light& other) {
+        if (this != &other) {
+            tex = other.tex;
+            if (tex == &other.color_tex) {
+                color_tex = other.color_tex;
+                tex = &color_tex;
+            }
+        }
+        return *this;
+    }
 
   private:
     texture* tex;
@@ -147,6 +176,20 @@ class isotropic : public material {
         scattered = ray(rec.p, random_unit_vector());
         attenuation = tex->value(rec.u, rec.v, rec.p);
         return true;
+    }
+    isotropic(const isotropic& other) {
+        *this = other;
+    }
+
+    isotropic& operator=(const isotropic& other) {
+        if (this != &other) {
+            tex = other.tex;
+            if (tex == &other.color_tex) {
+                color_tex = other.color_tex;
+                tex = &color_tex;
+            }
+        }
+        return *this;
     }
 
   private:
