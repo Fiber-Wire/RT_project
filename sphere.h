@@ -17,7 +17,7 @@
 class sphere : public hittable {
   public:
     // Stationary Sphere
-    sphere(const point3& static_center, double radius, shared_ptr<material> mat)
+    sphere(const point3& static_center, double radius, material* mat)
       : center(static_center, vec3(0,0,0)), radius(std::fmax(0,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
@@ -60,7 +60,7 @@ class sphere : public hittable {
   private:
     ray center;
     double radius;
-    shared_ptr<material> mat;
+    material* mat;
     aabb bbox;
 
     static void get_sphere_uv(const point3& p, double& u, double& v) {

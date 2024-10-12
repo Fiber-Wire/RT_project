@@ -64,8 +64,11 @@ namespace sdl_raii {
             SDL_SetWindowResizable(window_, SDL_FALSE);
         }
         ~Window() {
-            SDL_DestroyWindow(window_);
-            window_ = nullptr;
+            if (window_ != nullptr) {
+                SDL_DestroyWindow(window_);
+                window_ = nullptr;
+            }
+
         }
         SDL_Window* get() {
             return window_;
@@ -88,27 +91,27 @@ namespace sdl_raii {
     };
 }
 
-SDL_Window *init_sdl(int width, int height) {
-    SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
-    SDL_Init(SDL_INIT_VIDEO);
-    //
-    //SDL_Vulkan_LoadLibrary(nullptr);
-    auto window = SDL_CreateWindow(
-            "RT_project",
-            SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-            width, height,
-            SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);// | SDL_WINDOW_FULLSCREEN);
-    SDL_SetWindowResizable(window, SDL_FALSE);
-
-    return window;
-}
-
-void clean_sdl(SDL_Window *&window) {
-    SDL_DestroyWindow(window);
-    window = nullptr;
-    //SDL_Vulkan_UnloadLibrary();
-    SDL_Quit();
-}
+// SDL_Window *init_sdl(int width, int height) {
+//     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
+//     SDL_Init(SDL_INIT_VIDEO);
+//     //
+//     //SDL_Vulkan_LoadLibrary(nullptr);
+//     auto window = SDL_CreateWindow(
+//             "RT_project",
+//             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+//             width, height,
+//             SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);// | SDL_WINDOW_FULLSCREEN);
+//     SDL_SetWindowResizable(window, SDL_FALSE);
+//
+//     return window;
+// }
+//
+// void clean_sdl(SDL_Window *&window) {
+//     SDL_DestroyWindow(window);
+//     window = nullptr;
+//     //SDL_Vulkan_UnloadLibrary();
+//     SDL_Quit();
+// }
 
 bool want_exit_sdl() {
     SDL_Event sdlEvent;

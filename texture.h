@@ -39,11 +39,16 @@ class solid_color : public texture {
 
 class checker_texture : public texture {
   public:
-    checker_texture(double scale, shared_ptr<texture> even, shared_ptr<texture> odd)
+    checker_texture(double scale, texture* even, texture* odd)
       : inv_scale(1.0 / scale), even(even), odd(odd) {}
 
     checker_texture(double scale, const color& c1, const color& c2)
-      : checker_texture(scale, make_shared<solid_color>(c1), make_shared<solid_color>(c2)) {}
+      : inv_scale(1 / scale) {
+      color_even = solid_color(c1);
+      color_odd = solid_color(c2);
+      even = &color_even;
+      odd = &color_odd;
+    }
 
     color value(double u, double v, const point3& p) const override {
         auto xInteger = int(std::floor(inv_scale * p.x()));
@@ -57,8 +62,10 @@ class checker_texture : public texture {
 
   private:
     double inv_scale;
-    shared_ptr<texture> even;
-    shared_ptr<texture> odd;
+    texture* even;
+    texture* odd;
+    solid_color color_even{{0.5,0,0.5}};;
+    solid_color color_odd{{0.5,0,0.5}};;
 };
 
 

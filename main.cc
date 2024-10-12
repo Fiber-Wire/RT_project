@@ -42,28 +42,39 @@ void notify_renderer_exit(){
 
 void cornell_box() {
     hittable_list world;
+    std::vector<material*> objects;
 
-    auto red   = make_shared<lambertian>(color(.65, .05, .05));
-    auto white = make_shared<lambertian>(color(.73, .73, .73));
-    auto green = make_shared<lambertian>(color(.12, .45, .15));
-    auto light = make_shared<diffuse_light>(color(15, 15, 15));
+    auto red   = new lambertian(color(.65, .05, .05));
+    auto white = new lambertian(color(.73, .73, .73));
+    auto green = new lambertian(color(.12, .45, .15));
+    auto light = new diffuse_light(color(15, 15, 15));
+    objects.push_back(red);
+    objects.push_back(white);
+    objects.push_back(green);
+    objects.push_back(light);
+    auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green);
+    auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red);
+    auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light);
+    auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white);
+    auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white);
+    auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white);
 
-    world.add(make_shared<quad>(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green));
-    world.add(make_shared<quad>(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red));
-    world.add(make_shared<quad>(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light));
-    world.add(make_shared<quad>(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white));
-    world.add(make_shared<quad>(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white));
-    world.add(make_shared<quad>(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white));
+    world.add(quad_1);
+    world.add(quad_2);
+    world.add(quad_3);
+    world.add(quad_4);
+    world.add(quad_5);
+    world.add(quad_6);
 
-    shared_ptr<hittable> box1 = box(point3(0,0,0), point3(165,330,165), white);
-    box1 = make_shared<rotate_y>(box1, 15);
-    box1 = make_shared<translate>(box1, vec3(265,0,295));
-    world.add(box1);
+    hittable_list* box1 = box(point3(0,0,0), point3(165,330,165), white);
+    auto box1_rotate = new rotate_y(box1,15);
+    auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
+    world.add(box1_translate);
 
-    shared_ptr<hittable> box2 = box(point3(0,0,0), point3(165,165,165), white);
-    box2 = make_shared<rotate_y>(box2, -18);
-    box2 = make_shared<translate>(box2, vec3(130,0,65));
-    world.add(box2);
+    hittable_list* box2 = box(point3(0,0,0), point3(165,165,165), white);
+    auto box2_rotate = new rotate_y(box2, -18);
+    auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
+    world.add(box2_translate);
 
     camera cam;
 
@@ -84,9 +95,10 @@ void cornell_box() {
 
 hittable_list final_scene_build() {
     hittable_list boxes1;
-    auto ground = std::make_shared<lambertian>(color(0.48, 0.83, 0.53));
+    auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 20;
+    //////// vector<hittable*> all_boxes3
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
             auto w = 100.0;
@@ -97,41 +109,50 @@ hittable_list final_scene_build() {
             auto y1 = random_double(1,101);
             auto z1 = z0 + w;
 
-            boxes1.add(box(point3(x0,y0,z0), point3(x1,y1,z1), ground));
+            auto box3 = box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
+            boxes1.add(box3);
         }
     }
 
     hittable_list world;
+    std::vector<material*> objects;
 
-    world.add(std::make_shared<bvh_node>(boxes1));
+    auto bvh_node_boxes1 = new bvh_node(boxes1);
+    world.add(bvh_node_boxes1);
 
-    auto light = std::make_shared<diffuse_light>(color(7, 7, 7));
-    world.add(std::make_shared<quad>(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light));
+    auto light = new diffuse_light(color(7, 7, 7));
+    auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
+    world.add(quad_light_1);
 
-    world.add(std::make_shared<sphere>(point3(260, 150, 45), 50, std::make_shared<dielectric>(1.5)));
-    world.add(std::make_shared<sphere>(
-        point3(0, 150, 145), 50, std::make_shared<metal>(color(0.8, 0.8, 0.9), 1.0)
-    ));
+    auto dielectric_sphere = new dielectric(1.5);
+    auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
+    world.add(dielectric_sphere_1);
 
-    auto boundary = std::make_shared<sphere>(point3(360, 150, 145), 70, std::make_shared<dielectric>(1.5));
-    world.add(boundary);
+    auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
+    auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
+    world.add(metal_sphere_1);
 
-    auto emat = std::make_shared<lambertian>(std::make_shared<image_texture>("earthmap.jpg"));
-    world.add(std::make_shared<sphere>(point3(400, 200, 400), 100, emat));
+    auto dielectric_ground = new dielectric(1.5);
+    auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
+    world.add(dielectric_ground_1);
+
+    auto image_texture_emat = new image_texture("earthmap.jpg") ;
+    auto lambertian_emat = new lambertian(image_texture_emat);
+    auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
+    world.add(lambertian_emat_sphere_1);
 
     hittable_list boxes2;
-    auto white = std::make_shared<lambertian>(color(.73, .73, .73));
+    auto white = new lambertian(color(.73, .73, .73));
     int ns = 1000;
     for (int j = 0; j < ns; j++) {
-        boxes2.add(std::make_shared<sphere>(point3::random(0, 165), 10, white));
+        auto boxes2_sphere = new sphere(point3::random(0, 165), 10, white);
+        boxes2.add(boxes2_sphere);
     }
 
-    world.add(std::make_shared<translate>(
-        std::make_shared<rotate_y>(
-                std::make_shared<bvh_node>(boxes2), 15),
-            vec3(-100,270,395)
-        )
-    );
+    auto bvh_node_box = new bvh_node(boxes2);
+    auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
+    auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
+    world.add(bvh_node_box_translate);
     return world;
 }
 
@@ -202,7 +223,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
     auto scene = final_scene_build();
-    auto cam = final_camera(400, 50, 4);
+    auto cam = final_camera(100, 5, 2);
     if (argc!=1) {
         render_scene(scene, cam);
     } else {

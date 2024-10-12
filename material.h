@@ -33,8 +33,11 @@ class material {
 
 class lambertian : public material {
   public:
-    lambertian(const color& albedo) : tex(make_shared<solid_color>(albedo)) {}
-    lambertian(shared_ptr<texture> tex) : tex(tex) {}
+    lambertian(const color& albedo) {
+        color_tex = solid_color(albedo);
+        tex = &color_tex;
+    }
+    lambertian(texture* tex) : tex(tex) {}
 
     bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
@@ -50,7 +53,8 @@ class lambertian : public material {
     }
 
   private:
-    shared_ptr<texture> tex;
+    texture* tex;
+    solid_color color_tex{{0.5,0,0.5}};
 };
 
 
@@ -114,22 +118,29 @@ class dielectric : public material {
 
 class diffuse_light : public material {
   public:
-    diffuse_light(shared_ptr<texture> tex) : tex(tex) {}
-    diffuse_light(const color& emit) : tex(make_shared<solid_color>(emit)) {}
+    diffuse_light(texture* tex) : tex(tex) {}
+    diffuse_light(const color& emit) {
+        color_tex = solid_color(emit);
+        tex = &color_tex;
+    }
 
     color emitted(double u, double v, const point3& p) const override {
         return tex->value(u, v, p);
     }
 
   private:
-    shared_ptr<texture> tex;
+    texture* tex;
+    solid_color color_tex{{0.5,0,0.5}};
 };
 
 
 class isotropic : public material {
   public:
-    isotropic(const color& albedo) : tex(make_shared<solid_color>(albedo)) {}
-    isotropic(shared_ptr<texture> tex) : tex(tex) {}
+    isotropic(const color& albedo) {
+        color_tex = solid_color(albedo);
+        tex = &color_tex;
+    }
+    isotropic(texture* tex) : tex(tex) {}
 
     bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
@@ -139,7 +150,8 @@ class isotropic : public material {
     }
 
   private:
-    shared_ptr<texture> tex;
+    texture* tex;
+    solid_color color_tex{{0.5,0,0.5}};
 };
 
 
