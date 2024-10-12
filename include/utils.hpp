@@ -87,8 +87,7 @@ namespace utils {
     /// helper template to construct move-only class
     /// Usage: class Derived : private NonCopyable<Derived> {...}, or consult C++ CRTP
     template <class T>
-    class NonCopyable
-    {
+    class NonCopyable {
     public:
         NonCopyable (const NonCopyable &) = delete;
         T & operator = (const T &) = delete;

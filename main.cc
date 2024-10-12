@@ -12,7 +12,6 @@
 #include <semaphore>
 #include <string>
 #include <thread>
-#include <array>
 #include "sdl_wrapper.hpp"
 #include "rtweekend.h"
 
@@ -32,11 +31,9 @@ struct MainRendererComm{
 };
 MainRendererComm mainRendererComm{};
 void initialize_main_sync_objs(){
-    {
-        mainRendererComm.frame_start_render.try_acquire();
-        mainRendererComm.frame_rendered.release();
-        mainRendererComm.stop_render.store(false);
-    }
+    mainRendererComm.frame_start_render.try_acquire();
+    mainRendererComm.frame_rendered.release();
+    mainRendererComm.stop_render.store(false);
 }
 void notify_renderer_exit(){
     mainRendererComm.stop_render.store(true);
@@ -170,7 +167,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     auto window = sdl_raii::Window{"theNextWeek", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
     auto surface = sdl_raii::Surface{cam.image_width, height};
-    auto image = std::span<unsigned int>{(unsigned int*)surface.get()->pixels, (size_t)cam.image_width*height};
+    auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
     auto render_th = std::thread{render_thread, std::ref(cam), std::ref(scene), image};
     mainRendererComm.frame_start_render.release();
     auto t0 = std::chrono::steady_clock::now();

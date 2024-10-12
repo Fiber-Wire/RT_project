@@ -38,3 +38,5 @@ target_link_libraries(commons_headers
         $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
 )
 target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
+
+add_custom_file(RT_project images/earthmap.jpg images/earthmap.jpg)
