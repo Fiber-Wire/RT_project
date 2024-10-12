@@ -9,6 +9,7 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
+#include <future>
 #include <semaphore>
 #include <string>
 #include <thread>
@@ -32,7 +33,7 @@ struct MainRendererComm{
 MainRendererComm mainRendererComm{};
 void initialize_main_sync_objs(){
     mainRendererComm.frame_start_render.try_acquire();
-    mainRendererComm.frame_rendered.release();
+    mainRendererComm.frame_rendered.try_acquire();
     mainRendererComm.stop_render.store(false);
 }
 void notify_renderer_exit(){
@@ -168,7 +169,12 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     auto renderer = sdl_raii::Renderer{window.get()};
     auto surface = sdl_raii::Surface{cam.image_width, height};
     auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
-    auto render_th = std::thread{render_thread, std::ref(cam), std::ref(scene), image};
+    std::promise<void> render_finished;
+    std::future<void> render_finished_future = render_finished.get_future();
+    std::thread{[=, &render_finished, &cam, &scene] {
+        render_thread(cam, scene, image);
+        render_finished.set_value_at_thread_exit();
+    }}.detach();
     mainRendererComm.frame_start_render.release();
     auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl())
@@ -185,7 +191,10 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
         }
     }
     notify_renderer_exit();
-    render_th.join();
+    while(render_finished_future.wait_for(std::chrono::milliseconds{5})==std::future_status::timeout) {
+        want_exit_sdl();
+    }
+    render_finished_future.wait();
 }
 
 

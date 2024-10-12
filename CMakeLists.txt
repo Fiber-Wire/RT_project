@@ -40,3 +40,22 @@ target_link_libraries(commons_headers
 target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 
 add_custom_file(RT_project images/earthmap.jpg images/earthmap.jpg)
+
+if (1)
+    if(MSVC)
+        target_compile_options(RT_project PRIVATE /fsanitize=address)
+        target_link_options(RT_project PRIVATE /fsanitize=address)
+        # you need to copy those files from your compiler(cl.exe)'s directory to the thirdparty subdirectory
+        add_custom_file(RT_project
+                thirdparty/clang_rt.asan_dbg_dynamic-x86_64.dll clang_rt.asan_dbg_dynamic-x86_64.dll)
+        add_custom_file(RT_project
+                thirdparty/clang_rt.asan_dbg_dynamic-x86_64.pdb clang_rt.asan_dbg_dynamic-x86_64.pdb)
+        add_custom_file(RT_project
+                thirdparty/clang_rt.asan_dynamic-x86_64.dll clang_rt.asan_dynamic-x86_64.dll)
+        add_custom_file(RT_project
+                thirdparty/clang_rt.asan_dynamic-x86_64.pdb clang_rt.asan_dynamic-x86_64.pdb)
+    else ()
+        target_compile_options(RT_project PRIVATE -fsanitize=address)
+        target_link_options(RT_project PRIVATE -fsanitize=address)
+    endif ()
+endif ()
