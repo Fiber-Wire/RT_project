@@ -124,8 +124,6 @@ class dielectric : public material {
 
 class diffuse_light : public material {
   public:
-    __host__ __device__ diffuse_light(texture* tex) : tex(tex) {}
-    __host__ __device__ diffuse_light(const color& emit) {
     __host__ __device__ explicit diffuse_light(texture* tex) : tex(tex) {}
     __host__ __device__ explicit diffuse_light(const color& emit) {
         color_tex = solid_color(emit);
