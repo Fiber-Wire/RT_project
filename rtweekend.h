@@ -38,19 +38,25 @@ inline float degrees_to_radians(float degrees) {
 inline float random_float() {
     static thread_local std::random_device rd{};
     static thread_local std::mt19937 gen{rd()};
-    static thread_local std::uniform_real_distribution<> distr{0,1};
+    static thread_local std::uniform_real_distribution<float> distr{0,1};
     // Returns a random real in [0,1).
     return distr(gen);
 }
 
 inline float random_float(float min, float max) {
+    static thread_local std::random_device rd{};
+    static thread_local std::mt19937 gen{rd()};
+    static thread_local std::uniform_real_distribution<float> distr{min,max};
     // Returns a random real in [min,max).
-    return min + (max-min)*random_float();
+    return distr(gen);
 }
 
 inline int random_int(int min, int max) {
+    static thread_local std::random_device rd{};
+    static thread_local std::mt19937 gen{rd()};
+    static thread_local std::uniform_int_distribution<int> distr{min,max};
     // Returns a random integer in [min,max].
-    return int(random_float(min, max+1));
+    return distr(gen);
 }
 
 
