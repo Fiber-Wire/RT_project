@@ -49,7 +49,7 @@ class bvh_node : public hittable {
         }
     }
 
-    __host__ __device__ ~bvh_node() {
+    __host__ __device__ ~bvh_node() override {
         if (left_bvh) {
             delete left;
             left_bvh = false;

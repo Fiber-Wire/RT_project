@@ -31,6 +31,7 @@ class hit_record {
 
 class hittable {
   public:
+    __host__ __device__ virtual ~hittable() {}
 
     __host__ __device__ virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
 
