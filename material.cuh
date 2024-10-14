@@ -8,7 +8,7 @@
 
 class material {
   public:
-    __host__ __device__ virtual ~material() = default;
+    __host__ __device__ virtual ~material() {}
 
     __host__ __device__ virtual color emitted(float u, float v, const point3& p) const {
         return color(0,0,0);
@@ -24,11 +24,11 @@ class material {
 
 class lambertian : public material {
   public:
-    __host__ __device__ lambertian(const color& albedo) {
+    __host__ __device__ explicit lambertian(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
     }
-    __host__ __device__ lambertian(texture* tex) : tex(tex) {}
+    __host__ __device__ explicit lambertian(texture* tex) : tex(tex) {}
 
     __host__ __device__ lambertian(const lambertian& other) {
         *this = other;
@@ -85,7 +85,7 @@ class metal : public material {
 
 class dielectric : public material {
   public:
-    __host__ __device__ dielectric(float refraction_index) : refraction_index(refraction_index) {}
+    __host__ __device__ explicit dielectric(float refraction_index) : refraction_index(refraction_index) {}
 
     __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
@@ -126,6 +126,8 @@ class diffuse_light : public material {
   public:
     __host__ __device__ diffuse_light(texture* tex) : tex(tex) {}
     __host__ __device__ diffuse_light(const color& emit) {
+    __host__ __device__ explicit diffuse_light(texture* tex) : tex(tex) {}
+    __host__ __device__ explicit diffuse_light(const color& emit) {
         color_tex = solid_color(emit);
         tex = &color_tex;
     }
@@ -156,11 +158,11 @@ class diffuse_light : public material {
 
 class isotropic : public material {
   public:
-    __host__ __device__ isotropic(const color& albedo) {
+    __host__ __device__ explicit isotropic(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
     }
-    __host__ __device__ isotropic(texture* tex) : tex(tex) {}
+    __host__ __device__ explicit isotropic(texture* tex) : tex(tex) {}
 
     __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {

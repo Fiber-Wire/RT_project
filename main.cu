@@ -185,7 +185,7 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
 __global__ void debug_scene_build_cuda(hittable_list** world_ptr, curandState* states) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        *world_ptr = new hittable_list{0};
+        *world_ptr = new hittable_list{1};
         **world_ptr = debug_scene_build(states);
         //printf("%i", (*world_ptr)->capacity);
     }

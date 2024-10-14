@@ -10,6 +10,8 @@ class hittable_list : public hittable {
     int count{};
     int capacity{};
 
+    __host__ __device__ explicit hittable_list() : hittable_list(1) {}
+
     __host__ __device__ explicit hittable_list(const int capacity) : capacity(capacity) {
         objects = new hittable*[capacity];
         are_hitlist = new bool[capacity];
@@ -96,7 +98,7 @@ class hittable_list : public hittable {
 
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
-    __host__ __device__ ~hittable_list() {
+    __host__ __device__ ~hittable_list() override {
         delete[] are_hitlist;
         delete[] objects;
         capacity = 0;
