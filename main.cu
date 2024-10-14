@@ -352,7 +352,7 @@ int main(int argc, char* argv[]) {
     cudaDeviceSynchronize();
     utils::cu_check();
     // FIXME: camera::ray_color() causes stackoverflow on CUDA
-    final_camera_cuda<<<1,1>>>(400, 50, 3, camGpuPtr);
+    final_camera_cuda<<<1,1>>>(400, 50, 4, camGpuPtr);
     cudaDeviceSynchronize();
     utils::cu_check();
     auto scene = debug_scene_build(nullptr);

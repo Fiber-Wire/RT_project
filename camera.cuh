@@ -145,26 +145,27 @@ class camera {
     }
 
     __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world, curandState* rnd) const {
+        ray cur_ray = r;
+        vec3 cur_attenuation = vec3(1.0f,1.0f,1.0f);
+        for(int i = 0; i < depth; i++) {
+            hit_record rec;
+
+            // If the ray hits nothing, return the background color.
+            if (!world->hit(cur_ray, interval(0.001, INFINITY), rec))
+                return cur_attenuation * background;
+
+            ray scattered;
+            color attenuation;
+            color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
+
+            if (!rec.mat->scatter(cur_ray, rec, attenuation, scattered, rnd))
+                return cur_attenuation * color_from_emission;
+
+            cur_attenuation *= attenuation;
+            cur_ray = scattered;
+        }
         // If we've exceeded the ray bounce limit, no more light is gathered.
-        if (depth <= 0)
-            return color(0,0,0);
-
-        hit_record rec;
-
-        // If the ray hits nothing, return the background color.
-        if (!world->hit(r, interval(0.001, INFINITY), rec))
-            return background;
-
-        ray scattered;
-        color attenuation;
-        color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
-
-        if (!rec.mat->scatter(r, rec, attenuation, scattered, rnd))
-            return color_from_emission;
-
-        color color_from_scatter = attenuation * ray_color(scattered, depth-1, world, rnd);
-
-        return color_from_emission + color_from_scatter;
+        return color(0,0,0);
     }
 };
 
