@@ -14,7 +14,8 @@
 #include "texture.cuh"
 #include "curand.h"
 #include "curand_kernel.h"
-
+#define BLOCKDIM_X 64
+#define GRIDDIM_X 64
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
     std::binary_semaphore frame_rendered{0};
@@ -148,7 +149,7 @@ hittable_list final_scene_build() {
 __host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
     hittable_list boxes1{4};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
-    hittable_list world{7};
+    hittable_list world{3};
 
     int boxes_per_side = 2;
     for (int i = 0; i < boxes_per_side; i++) {
@@ -163,14 +164,14 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
-            world.add(box3);
+            boxes1.add(box3);
         }
     }
 
 
-    // FIXME: the following assignment cause crashes
-    //auto bvh_node_boxes1 = new bvh_node{boxes1};
-    //world.add(bvh_node_boxes1);
+    // FIXME: bvh_node::hit() causes stackoverflow on CUDA
+    auto bvh_node_boxes1 = new bvh_node{boxes1};
+    world.add(bvh_node_boxes1);
 
     auto light = new diffuse_light(color(7, 7, 7));
     world.add(new sphere{point3{123, 554, 147}, 100, light});
@@ -254,7 +255,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** sce
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
             //cam.render_parallel(scene, image);
-            camera_render_cuda<<<64,64>>>(cam_cuda, scene_cuda, imageGpu, devStates);
+            camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
             cudaDeviceSynchronize();
             cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
@@ -341,8 +342,8 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
     curandState *devStates;
-    cudaMalloc(&devStates, 64*64*sizeof(curandState));
-    initCurand<<<64,64>>>(devStates, 1);
+    cudaMalloc(&devStates, GRIDDIM_X*BLOCKDIM_X*sizeof(curandState));
+    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates, 1);
     hittable_list** sceneGpuPtr{};
     cudaMalloc(&sceneGpuPtr, sizeof(hittable_list*));
     camera* camGpuPtr{};
@@ -350,7 +351,8 @@ int main(int argc, char* argv[]) {
     debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr, devStates);
     cudaDeviceSynchronize();
     utils::cu_check();
-    final_camera_cuda<<<1,1>>>(400, 50, 4, camGpuPtr);
+    // FIXME: camera::ray_color() causes stackoverflow on CUDA
+    final_camera_cuda<<<1,1>>>(400, 50, 3, camGpuPtr);
     cudaDeviceSynchronize();
     utils::cu_check();
     auto scene = debug_scene_build(nullptr);
