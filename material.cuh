@@ -15,7 +15,7 @@ class material {
     }
 
     __host__ __device__ virtual bool scatter(
-        const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered
+        const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd
     ) const {
         return false;
     }
@@ -45,9 +45,9 @@ class lambertian : public material {
         return *this;
     }
 
-    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
-        auto scatter_direction = rec.normal + random_unit_vector();
+        auto scatter_direction = rec.normal + random_unit_vector(rnd);
 
         // Catch degenerate scatter direction
         if (near_zero(scatter_direction))
@@ -68,10 +68,10 @@ class metal : public material {
   public:
     __host__ __device__ metal(const color& albedo, float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
 
-    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
         vec3 reflected = reflect(r_in.direction(), rec.normal);
-        reflected = unit_vector(reflected) + (fuzz * random_unit_vector());
+        reflected = unit_vector(reflected) + (fuzz * random_unit_vector(rnd));
         scattered = ray(rec.p, reflected);
         attenuation = albedo;
         return (dot(scattered.direction(), rec.normal) > 0);
@@ -87,19 +87,19 @@ class dielectric : public material {
   public:
     __host__ __device__ dielectric(float refraction_index) : refraction_index(refraction_index) {}
 
-    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
         attenuation = color(1.0, 1.0, 1.0);
         float ri = rec.front_face ? (1.0/refraction_index) : refraction_index;
 
         vec3 unit_direction = unit_vector(r_in.direction());
-        float cos_theta = std::fmin(dot(-unit_direction, rec.normal), 1.0);
+        float cos_theta = min(dot(-unit_direction, rec.normal), 1.0);
         float sin_theta = std::sqrt(1.0 - cos_theta*cos_theta);
 
         bool cannot_refract = ri * sin_theta > 1.0;
         vec3 direction;
 
-        if (cannot_refract || reflectance(cos_theta, ri) > random_float())
+        if (cannot_refract || reflectance(cos_theta, ri) > random_float(rnd))
             direction = reflect(unit_direction, rec.normal);
         else
             direction = refract(unit_direction, rec.normal, ri);
@@ -162,9 +162,9 @@ class isotropic : public material {
     }
     __host__ __device__ isotropic(texture* tex) : tex(tex) {}
 
-    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
-        scattered = ray(rec.p, random_unit_vector());
+        scattered = ray(rec.p, random_unit_vector(rnd));
         attenuation = tex->value(rec.u, rec.v, rec.p);
         return true;
     }

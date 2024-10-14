@@ -12,7 +12,7 @@ class sphere : public hittable {
   public:
     // Stationary Sphere
     __host__ __device__ sphere(const point3& static_center, float radius, material* mat)
-      : center(static_center, vec3(0,0,0)), radius(std::fmax(0,radius)), mat(mat)
+      : center(static_center, vec3(0,0,0)), radius(max(0.0f,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
         bbox = aabb(static_center - rvec, static_center + rvec);

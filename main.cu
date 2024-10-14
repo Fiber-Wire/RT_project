@@ -13,6 +13,7 @@
 #include "geometry.cuh"
 #include "texture.cuh"
 #include "curand.h"
+#include "curand_kernel.h"
 
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
@@ -95,7 +96,7 @@ hittable_list final_scene_build() {
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
             auto x1 = x0 + w;
-            auto y1 = random_float(1,101);
+            auto y1 = random_float(1,101, nullptr);
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
@@ -133,7 +134,7 @@ hittable_list final_scene_build() {
     hittable_list boxes2{ns};
     auto white = new lambertian(color(.73, .73, .73));
     for (int j = 0; j < ns; j++) {
-        auto boxes2_sphere = new sphere(random_in_cube(0, 165), 10, white);
+        auto boxes2_sphere = new sphere(random_in_cube(0, 165, nullptr), 10, white);
         boxes2.add(boxes2_sphere);
     }
 
@@ -144,9 +145,10 @@ hittable_list final_scene_build() {
     return world;
 }
 
-__host__ __device__ hittable_list debug_scene_build() {
+__host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
     hittable_list boxes1{4};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
+    hittable_list world{7};
 
     int boxes_per_side = 2;
     for (int i = 0; i < boxes_per_side; i++) {
@@ -156,18 +158,19 @@ __host__ __device__ hittable_list debug_scene_build() {
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
             auto x1 = x0 + w;
-            auto y1 = random_float(1,101);
+            auto y1 = random_float(1,101, rnd);
+
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
-            boxes1.add(box3);
+            world.add(box3);
         }
     }
 
-    hittable_list world{3};
 
-    auto bvh_node_boxes1 = new bvh_node{boxes1};
-    world.add(bvh_node_boxes1);
+    // FIXME: the following assignment cause crashes
+    //auto bvh_node_boxes1 = new bvh_node{boxes1};
+    //world.add(bvh_node_boxes1);
 
     auto light = new diffuse_light(color(7, 7, 7));
     world.add(new sphere{point3{123, 554, 147}, 100, light});
@@ -179,10 +182,12 @@ __host__ __device__ hittable_list debug_scene_build() {
     return world;
 }
 
-__global__ void debug_scene_build_cuda(hittable_list* world_ptr) {
+__global__ void debug_scene_build_cuda(hittable_list** world_ptr, curandState* states) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        *world_ptr = debug_scene_build();
+        *world_ptr = new hittable_list{0};
+        **world_ptr = debug_scene_build(states);
+        //printf("%i", (*world_ptr)->capacity);
     }
 }
 
@@ -222,16 +227,25 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
     }
 }
 
-__global__ void camera_render_cuda(camera* cam, const hittable_list* scene, std::span<unsigned int> image) {
+__global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        cam->initialize();
+    }
     auto gridSize = blockDim.x * gridDim.x;
     auto width = cam->image_width;
+    auto scene = *scenepptr;
     for (unsigned int pixelId = tid; pixelId < image.size(); pixelId+=gridSize) {
-        image[pixelId] = cam->render_pixel(scene, pixelId/width, pixelId%width);
+        image[pixelId] = cam->render_pixel(scene, pixelId/width, pixelId%width, devStates+tid);
+        // if (tid==230) {
+        //     printf("{%i, %i}: (%u, %u, %u)\n",
+        //         (int)pixelId/width, (int)pixelId%width,
+        //         (image[pixelId]>>16)%256, (image[pixelId]>>8)%256, image[pixelId]%256);
+        // }
     }
 }
 
-void render_thread_cuda(const camera& cam, camera* cam_cuda, const hittable_list* scene_cuda, std::span<unsigned int> image) {
+void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
     int height = int(cam.image_width/cam.aspect_ratio);
     int width  = cam.image_width;
     unsigned int* imageGpuPtr{};
@@ -240,9 +254,10 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, const hittable_list
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
             //cam.render_parallel(scene, image);
-            camera_render_cuda<<<64,64>>>(cam_cuda, scene_cuda, imageGpu);
-            cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+            camera_render_cuda<<<64,64>>>(cam_cuda, scene_cuda, imageGpu, devStates);
             cudaDeviceSynchronize();
+            cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+
             utils::cu_check();
             mainRendererComm.frame_rendered.release();
         }
@@ -284,7 +299,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
-void render_scene_realtime_cuda(hittable_list* scene, camera &cam, camera *cam_cuda) {
+void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
     int height = int(cam.image_width/cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -293,7 +308,7 @@ void render_scene_realtime_cuda(hittable_list* scene, camera &cam, camera *cam_c
     std::promise<void> render_finished;
     std::future<void> render_finished_future = render_finished.get_future();
     std::thread{[=, &render_finished, &cam, &scene] {
-        //render_thread_cuda(cam, cam_cuda, scene, image);
+        render_thread_cuda(cam, cam_cuda, scene, image, devStates);
         render_finished.set_value_at_thread_exit();
     }}.detach();
     mainRendererComm.frame_start_render.release();
@@ -316,29 +331,40 @@ void render_scene_realtime_cuda(hittable_list* scene, camera &cam, camera *cam_c
         want_exit_sdl();
     }
     render_finished_future.wait();
-    // we don't do the cleanup yet
-    cudaDeviceReset();
 }
 
-
+__global__ void initCurand(curandState *state, unsigned long seed){
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    curand_init(seed, idx, 0, &state[idx]);
+}
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
-    hittable_list* sceneGpuPtr{};
-    cudaMalloc(&sceneGpuPtr, sizeof(hittable_list));
+    curandState *devStates;
+    cudaMalloc(&devStates, 64*64*sizeof(curandState));
+    initCurand<<<64,64>>>(devStates, 1);
+    hittable_list** sceneGpuPtr{};
+    cudaMalloc(&sceneGpuPtr, sizeof(hittable_list*));
     camera* camGpuPtr{};
     cudaMalloc(&camGpuPtr, sizeof(camera));
-    debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr);
+    debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr, devStates);
+    cudaDeviceSynchronize();
+    utils::cu_check();
     final_camera_cuda<<<1,1>>>(400, 50, 4, camGpuPtr);
     cudaDeviceSynchronize();
     utils::cu_check();
-    auto scene = final_scene_build();
+    auto scene = debug_scene_build(nullptr);
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);
     } else {
-        render_scene_realtime(scene, cam);
-        //render_scene_realtime_cuda(sceneGpuPtr, cam, camGpuPtr);
+        //render_scene_realtime(scene, cam);
+        render_scene_realtime_cuda(sceneGpuPtr, cam, camGpuPtr, devStates);
     }
+    cudaFree(sceneGpuPtr);
+    cudaFree(camGpuPtr);
+    cudaFree(devStates);
+    // we don't do the cleanup yet
+    cudaDeviceReset();
     return 0;
 }

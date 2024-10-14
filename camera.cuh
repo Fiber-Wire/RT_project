@@ -31,8 +31,8 @@ class camera {
             for (int i = 0; i < image_width; i++) {
                 color pixel_color(0,0,0);
                 for (int sample = 0; sample < samples_per_pixel; sample++) {
-                    ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, max_depth, &world);
+                    ray r = get_ray(i, j, nullptr);
+                    pixel_color += ray_color(r, max_depth, &world, nullptr);
                 }
                 write_color(std::cout, pixel_samples_scale * pixel_color);
             }
@@ -41,11 +41,11 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const hittable* world, int j, int i) {
+    __host__ __device__ unsigned int render_pixel(const hittable* world, int j, int i, curandState *rnd) {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
-            ray r = get_ray(i, j);
-            pixel_color += ray_color(r, max_depth, world);
+            ray r = get_ray(i, j, rnd);
+            pixel_color += ray_color(r, max_depth, world, rnd);
         }
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
@@ -57,7 +57,7 @@ class camera {
             utils::log<utils::LogLevel::eVerbose>(
                 std::string{"Scanlines remaining: "} + std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
-                image[i+j*image_width] = render_pixel(&world, j, i);
+                image[i+j*image_width] = render_pixel(&world, j, i, nullptr);
             }
         }
     }
@@ -67,10 +67,10 @@ class camera {
         int num_threads = std::thread::hardware_concurrency();
         std::vector<std::thread> threads{};
         for (auto tId = 0; tId < num_threads; tId++) {
-            threads.emplace_back([=, &image, &world]() {
+            threads.emplace_back([tId, num_threads, this, &image, &world]() {
                 for (int j = tId; j < image_height; j+=num_threads) {
                     for (int i = 0; i < image_width; i++) {
-                        image[i+j*image_width] = render_pixel(&world, j, i);
+                        image[i+j*image_width] = render_pixel(&world, j, i, nullptr);
                     }
                 }
             });
@@ -79,17 +79,6 @@ class camera {
             t.join();
         }
     }
-
-
-  private:
-    int    image_height;         // Rendered image height
-    float pixel_samples_scale;  // Color scale factor for a sum of pixel samples
-    point3 center;               // Camera center
-    point3 pixel00_loc;          // Location of pixel 0, 0
-    vec3   pixel_delta_u;        // Offset to pixel to the right
-    vec3   pixel_delta_v;        // Offset to pixel below
-    vec3   u, v, w;              // Camera frame basis vectors
-
     __host__ __device__ void initialize() {
         image_height = int(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
@@ -123,11 +112,23 @@ class camera {
 
     }
 
-    __host__ __device__ ray get_ray(int i, int j) const {
+
+  private:
+    int    image_height;         // Rendered image height
+    float pixel_samples_scale;  // Color scale factor for a sum of pixel samples
+    point3 center;               // Camera center
+    point3 pixel00_loc;          // Location of pixel 0, 0
+    vec3   pixel_delta_u;        // Offset to pixel to the right
+    vec3   pixel_delta_v;        // Offset to pixel below
+    vec3   u, v, w;              // Camera frame basis vectors
+
+
+
+    __host__ __device__ ray get_ray(int i, int j, curandState* rnd) const {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
-        auto offset = sample_square();
+        auto offset = sample_square(rnd);
         auto pixel_sample = pixel00_loc
                           + ((i + offset.x) * pixel_delta_u)
                           + ((j + offset.y) * pixel_delta_v);
@@ -138,12 +139,12 @@ class camera {
         return ray(ray_origin, ray_direction);
     }
 
-    __host__ __device__ vec3 sample_square() const {
+    __host__ __device__ vec3 sample_square(curandState* rnd) const {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
-        return vec3(random_float() - 0.5, random_float() - 0.5, 0);
+        return vec3(random_float(rnd) - 0.5, random_float(rnd) - 0.5, 0);
     }
 
-    __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world) const {
+    __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world, curandState* rnd) const {
         // If we've exceeded the ray bounce limit, no more light is gathered.
         if (depth <= 0)
             return color(0,0,0);
@@ -158,10 +159,10 @@ class camera {
         color attenuation;
         color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
 
-        if (!rec.mat->scatter(r, rec, attenuation, scattered))
+        if (!rec.mat->scatter(r, rec, attenuation, scattered, rnd))
             return color_from_emission;
 
-        color color_from_scatter = attenuation * ray_color(scattered, depth-1, world);
+        color color_from_scatter = attenuation * ray_color(scattered, depth-1, world, rnd);
 
         return color_from_emission + color_from_scatter;
     }

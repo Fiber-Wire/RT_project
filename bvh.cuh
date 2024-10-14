@@ -11,7 +11,7 @@
 class bvh_node : public hittable {
   public:
     __host__ __device__ bvh_node(): bbox(aabb::universe()) {}
-    __host__ __device__ bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
+    __host__ __device__ explicit bvh_node(hittable_list& list) : bvh_node(list.get_objects(), 0, list.count) {
         // There's a C++ subtlety here. This constructor (without span indices) creates an
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to

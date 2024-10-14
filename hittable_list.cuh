@@ -16,7 +16,7 @@ class hittable_list : public hittable {
     }
 
     __host__ __device__ explicit hittable_list(hittable* object) { add(object); }
-    hittable_list(const hittable_list& other) {
+    __host__ __device__ hittable_list(const hittable_list& other) {
         *this = other;
     }
     __host__ __device__ hittable_list& operator=(const hittable_list& other) {
@@ -35,7 +35,7 @@ class hittable_list : public hittable {
             for (int i = 0; i < count; i++) {
                 if (are_hitlist[i]) {
                     objects[i] = new hittable_list{other.capacity};
-                    *(hittable_list*)(objects[i]) = *(hittable_list*)(other.objects[i]);
+                    *static_cast<hittable_list *>(objects[i]) = *static_cast<hittable_list *>(other.objects[i]);
                 }
             }
         }
@@ -55,6 +55,9 @@ class hittable_list : public hittable {
     }
 
     __host__ __device__ void add(hittable* object) {
+        if (object == nullptr) {
+            return;
+        }
         if (count < capacity) {
             objects[count] = object;
             are_hitlist[count] = false;

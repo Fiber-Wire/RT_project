@@ -14,33 +14,33 @@ __host__ __device__ inline bool near_zero(const vec3 &v) {
     auto s = 1e-8;
     return (std::fabs(v.x) < s) && (std::fabs(v.y) < s) && (std::fabs(v.z) < s);
 }
-__host__ __device__ inline vec3 random_in_cube(float min, float max) {
-    return {random_float(min, max), random_float(min, max), random_float(min, max)};
+__host__ __device__ inline vec3 random_in_cube(float min, float max, curandState* rnd) {
+    return {random_float(min, max, rnd), random_float(min, max, rnd), random_float(min, max, rnd)};
 }
 
 __host__ __device__ inline vec3 unit_vector(const vec3& v) {
     return glm::normalize(v);
 }
 
-__host__ __device__ inline vec3 random_in_unit_disk() {
+__host__ __device__ inline vec3 random_in_unit_disk(curandState* rnd) {
     while (true) {
-        auto p = vec3(random_float(-1,1), random_float(-1,1), 0);
+        auto p = vec3(random_float(-1,1, rnd), random_float(-1,1, rnd), 0);
         if (glm::dot(p,p) < 1)
             return p;
     }
 }
 
-__host__ __device__ inline vec3 random_unit_vector() {
+__host__ __device__ inline vec3 random_unit_vector(curandState* rnd) {
     while (true) {
-        auto p = vec3(random_float(-1,1), random_float(-1,1), random_float(-1,1));
+        auto p = vec3(random_float(-1,1, rnd), random_float(-1,1, rnd), random_float(-1,1, rnd));
         auto lensq = glm::dot(p,p);
         if (1e-160 < lensq && lensq <= 1.0)
             return glm::normalize(p);
     }
 }
 
-__host__ __device__ inline vec3 random_on_hemisphere(const vec3& normal) {
-    vec3 on_unit_sphere = random_unit_vector();
+__host__ __device__ inline vec3 random_on_hemisphere(const vec3& normal, curandState* rnd) {
+    vec3 on_unit_sphere = random_unit_vector(rnd);
     if (dot(on_unit_sphere, normal) > 0.0) // In the same hemisphere as the normal
         return on_unit_sphere;
     else
