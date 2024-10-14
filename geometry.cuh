@@ -152,7 +152,7 @@ inline hittable_list* create_box(const point3& a, const point3& b, material* mat
 {
     // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
 
-    auto sides = new hittable_list();
+    auto sides = new hittable_list(6);
 
     // Construct the two opposite vertices with the minimum and maximum coordinates.
     auto min = point3(std::fmin(a.x,b.x), std::fmin(a.y,b.y), std::fmin(a.z,b.z));

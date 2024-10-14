@@ -29,7 +29,7 @@ void notify_renderer_exit(){
 }
 
 void cornell_box() {
-    hittable_list world;
+    hittable_list world{1000};
     std::vector<material*> objects;
 
     auto red   = new lambertian(color(.65, .05, .05));
@@ -82,7 +82,7 @@ void cornell_box() {
 
 
 hittable_list final_scene_build() {
-    hittable_list boxes1{};
+    hittable_list boxes1{5000};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 20;
@@ -102,7 +102,7 @@ hittable_list final_scene_build() {
         }
     }
 
-    hittable_list world{};
+    hittable_list world{5000};
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
@@ -128,7 +128,7 @@ hittable_list final_scene_build() {
     auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
     world.add(lambertian_emat_sphere_1);
 
-    hittable_list boxes2;
+    hittable_list boxes2{5000};
     auto white = new lambertian(color(.73, .73, .73));
     int ns = 1000;
     for (int j = 0; j < ns; j++) {
@@ -144,7 +144,7 @@ hittable_list final_scene_build() {
 }
 
 hittable_list debug_scene_build() {
-    hittable_list boxes1{};
+    hittable_list boxes1{5000};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 2;
@@ -163,7 +163,7 @@ hittable_list debug_scene_build() {
         }
     }
 
-    hittable_list world{};
+    hittable_list world{5000};
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
