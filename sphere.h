@@ -27,9 +27,9 @@ class sphere : public hittable {
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         point3 current_center = center.origin();
         vec3 oc = current_center - r.origin();
-        auto a = r.direction().length_squared();
+        auto a = glm::dot(r.direction(), r.direction());
         auto h = dot(r.direction(), oc);
-        auto c = oc.length_squared() - radius*radius;
+        auto c = glm::dot(oc, oc) - radius*radius;
 
         auto discriminant = h*h - a*c;
         if (discriminant < 0)
@@ -71,8 +71,8 @@ class sphere : public hittable {
         //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
         //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
 
-        auto theta = std::acos(-p.y());
-        auto phi = std::atan2(-p.z(), p.x()) + pi;
+        auto theta = std::acos(-p.y);
+        auto phi = std::atan2(-p.z, p.x) + pi;
 
         u = phi / (2*pi);
         v = theta / pi;

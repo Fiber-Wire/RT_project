@@ -144,7 +144,7 @@ hittable_list final_scene_build() {
     auto white = new lambertian(color(.73, .73, .73));
     int ns = 1000;
     for (int j = 0; j < ns; j++) {
-        auto boxes2_sphere = new sphere(point3::random(0, 165), 10, white);
+        auto boxes2_sphere = new sphere(random_in_cube(0, 165), 10, white);
         boxes2.add(boxes2_sphere);
     }
 
@@ -257,7 +257,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
-    auto scene = final_scene_build();
+    auto scene = debug_scene_build();
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);

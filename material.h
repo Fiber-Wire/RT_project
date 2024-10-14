@@ -13,6 +13,7 @@
 
 #include "hittable.h"
 #include "texture.h"
+#include "vec3.h"
 
 
 class material {
@@ -59,7 +60,7 @@ class lambertian : public material {
         auto scatter_direction = rec.normal + random_unit_vector();
 
         // Catch degenerate scatter direction
-        if (scatter_direction.near_zero())
+        if (near_zero(scatter_direction))
             scatter_direction = rec.normal;
 
         scattered = ray(rec.p, scatter_direction);

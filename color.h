@@ -46,9 +46,9 @@ unsigned int pixel_from_color(const color& pixel_color) {
 }
 
 void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte) {
-    auto r = pixel_color.x();
-    auto g = pixel_color.y();
-    auto b = pixel_color.z();
+    auto r = pixel_color.x;
+    auto g = pixel_color.y;
+    auto b = pixel_color.z;
     // Translate the [0,1] component values to the byte range [0,255].
     static const interval intensity(0.000, 0.999);
     // Apply a linear to gamma transform for gamma 2

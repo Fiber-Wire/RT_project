@@ -51,9 +51,9 @@ class checker_texture : public texture {
     }
 
     color value(float u, float v, const point3& p) const override {
-        auto xInteger = int(std::floor(inv_scale * p.x()));
-        auto yInteger = int(std::floor(inv_scale * p.y()));
-        auto zInteger = int(std::floor(inv_scale * p.z()));
+        auto xInteger = int(std::floor(inv_scale * p.x));
+        auto yInteger = int(std::floor(inv_scale * p.y));
+        auto zInteger = int(std::floor(inv_scale * p.z));
 
         bool isEven = (xInteger + yInteger + zInteger) % 2 == 0;
 

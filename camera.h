@@ -123,12 +123,12 @@ class camera {
         vec3 viewport_v = viewport_height * -v;  // Vector down viewport vertical edge
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-        pixel_delta_u = viewport_u / image_width;
-        pixel_delta_v = viewport_v / image_height;
+        pixel_delta_u = viewport_u / (float)image_width;
+        pixel_delta_v = viewport_v / (float)image_height;
 
         // Calculate the location of the upper left pixel.
-        auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2 - viewport_v/2;
-        pixel00_loc = viewport_upper_left + 0.5 * (pixel_delta_u + pixel_delta_v);
+        auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2.0f - viewport_v/2.0f;
+        pixel00_loc = viewport_upper_left + 0.5f * (pixel_delta_u + pixel_delta_v);
 
     }
 
@@ -138,8 +138,8 @@ class camera {
 
         auto offset = sample_square();
         auto pixel_sample = pixel00_loc
-                          + ((i + offset.x()) * pixel_delta_u)
-                          + ((j + offset.y()) * pixel_delta_v);
+                          + ((i + offset.x) * pixel_delta_u)
+                          + ((j + offset.y) * pixel_delta_v);
 
         auto ray_origin = center;
         auto ray_direction = pixel_sample - ray_origin;
