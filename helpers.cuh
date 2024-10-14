@@ -1,5 +1,5 @@
-#ifndef RTWEEKEND_H
-#define RTWEEKEND_H
+#ifndef HELPERS_H
+#define HELPERS_H
 
 #include <cmath>
 #include <cstdlib>
@@ -23,7 +23,8 @@ const float pi = 3.1415926535897932385;
 
 // Utility Functions
 
-inline float degrees_to_radians(float degrees) {
+__host__ __device__ inline float degrees_to_radians(float degrees) {
+    const float pi = 3.1415926535897932385;
     return degrees * pi / 180.0;
 }
 
@@ -50,14 +51,6 @@ inline int random_int(int min, int max) {
     // Returns a random integer in [min,max].
     return distr(gen);
 }
-
-
-// Common Headers
-
-// #include "color.cuh"
-// #include "interval.cuh"
-// #include "ray.cuh"
-// #include "vec3.cuh"
 
 
 #endif

@@ -1,5 +1,5 @@
-#ifndef RTW_STB_IMAGE_H
-#define RTW_STB_IMAGE_H
+#ifndef IMAGE_LOADER_H
+#define IMAGE_LOADER_H
 
 // Disable strict warnings for this header from the Microsoft Visual C++ compiler.
 #ifdef _MSC_VER

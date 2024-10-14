@@ -41,7 +41,7 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    unsigned int render_pixel(const hittable &world, int j, int i) {
+    __host__ __device__ unsigned int render_pixel(const hittable &world, int j, int i) {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(i, j);
@@ -54,7 +54,8 @@ class camera {
         initialize();
 
         for (int j = 0; j < image_height; j++) {
-            utils::log<utils::LogLevel::eVerbose>(std::string{"Scanlines remaining: "}+std::to_string(image_height - j));
+            utils::log<utils::LogLevel::eVerbose>(
+                std::string{"Scanlines remaining: "} + std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
                 image[i+j*image_width] = render_pixel(world, j, i);
             }
@@ -89,7 +90,7 @@ class camera {
     vec3   pixel_delta_v;        // Offset to pixel below
     vec3   u, v, w;              // Camera frame basis vectors
 
-    void initialize() {
+    __host__ __device__ void initialize() {
         image_height = int(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
 
@@ -122,7 +123,7 @@ class camera {
 
     }
 
-    ray get_ray(int i, int j) const {
+    __host__ __device__ ray get_ray(int i, int j) const {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
@@ -137,7 +138,7 @@ class camera {
         return ray(ray_origin, ray_direction);
     }
 
-    vec3 sample_square() const {
+    __host__ __device__ vec3 sample_square() const {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
         return vec3(random_float() - 0.5, random_float() - 0.5, 0);
     }

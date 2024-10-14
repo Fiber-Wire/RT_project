@@ -42,8 +42,8 @@ class interval {
     static const interval empty, universe;
 };
 
-const interval interval::empty    = interval(+infinity, -infinity);
-const interval interval::universe = interval(-infinity, +infinity);
+const interval interval::empty    = interval(+INFINITY, -INFINITY);
+const interval interval::universe = interval(-INFINITY, +INFINITY);
 
 __host__ __device__ interval operator+(const interval& ival, float displacement) {
     return interval(ival.min + displacement, ival.max + displacement);
