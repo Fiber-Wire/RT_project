@@ -39,11 +39,13 @@ class interval {
         return interval(min - padding, max + padding);
     }
 
-    static const interval empty, universe;
+    __host__ __device__ static interval empty() {
+        return {+INFINITY, -INFINITY};
+    }
+    __host__ __device__ static interval universe() {
+        return {-INFINITY, +INFINITY};
+    }
 };
-
-const interval interval::empty    = interval(+INFINITY, -INFINITY);
-const interval interval::universe = interval(-INFINITY, +INFINITY);
 
 __host__ __device__ interval operator+(const interval& ival, float displacement) {
     return interval(ival.min + displacement, ival.max + displacement);

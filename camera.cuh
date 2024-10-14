@@ -32,7 +32,7 @@ class camera {
                 color pixel_color(0,0,0);
                 for (int sample = 0; sample < samples_per_pixel; sample++) {
                     ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, max_depth, world);
+                    pixel_color += ray_color(r, max_depth, &world);
                 }
                 write_color(std::cout, pixel_samples_scale * pixel_color);
             }
@@ -41,7 +41,7 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const hittable &world, int j, int i) {
+    __host__ __device__ unsigned int render_pixel(const hittable* world, int j, int i) {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(i, j);
@@ -57,7 +57,7 @@ class camera {
             utils::log<utils::LogLevel::eVerbose>(
                 std::string{"Scanlines remaining: "} + std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
-                image[i+j*image_width] = render_pixel(world, j, i);
+                image[i+j*image_width] = render_pixel(&world, j, i);
             }
         }
     }
@@ -70,7 +70,7 @@ class camera {
             threads.emplace_back([=, &image, &world]() {
                 for (int j = tId; j < image_height; j+=num_threads) {
                     for (int i = 0; i < image_width; i++) {
-                        image[i+j*image_width] = render_pixel(world, j, i);
+                        image[i+j*image_width] = render_pixel(&world, j, i);
                     }
                 }
             });
@@ -143,7 +143,7 @@ class camera {
         return vec3(random_float() - 0.5, random_float() - 0.5, 0);
     }
 
-    color ray_color(const ray& r, int depth, const hittable& world) const {
+    __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world) const {
         // If we've exceeded the ray bounce limit, no more light is gathered.
         if (depth <= 0)
             return color(0,0,0);
@@ -151,7 +151,7 @@ class camera {
         hit_record rec;
 
         // If the ray hits nothing, return the background color.
-        if (!world.hit(r, interval(0.001, infinity), rec))
+        if (!world->hit(r, interval(0.001, INFINITY), rec))
             return background;
 
         ray scattered;

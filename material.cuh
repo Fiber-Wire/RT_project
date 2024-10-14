@@ -8,13 +8,13 @@
 
 class material {
   public:
-    virtual ~material() = default;
+    __host__ __device__ virtual ~material() = default;
 
-    virtual color emitted(float u, float v, const point3& p) const {
+    __host__ __device__ virtual color emitted(float u, float v, const point3& p) const {
         return color(0,0,0);
     }
 
-    virtual bool scatter(
+    __host__ __device__ virtual bool scatter(
         const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered
     ) const {
         return false;
@@ -24,17 +24,17 @@ class material {
 
 class lambertian : public material {
   public:
-    lambertian(const color& albedo) {
+    __host__ __device__ lambertian(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
     }
-    lambertian(texture* tex) : tex(tex) {}
+    __host__ __device__ lambertian(texture* tex) : tex(tex) {}
 
-    lambertian(const lambertian& other) {
+    __host__ __device__ lambertian(const lambertian& other) {
         *this = other;
     }
 
-    lambertian& operator=(const lambertian& other) {
+    __host__ __device__ lambertian& operator=(const lambertian& other) {
         if (this != &other) {
             tex = other.tex;
             if (tex == &other.color_tex) {
@@ -45,7 +45,7 @@ class lambertian : public material {
         return *this;
     }
 
-    bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
         auto scatter_direction = rec.normal + random_unit_vector();
 
@@ -66,9 +66,9 @@ class lambertian : public material {
 
 class metal : public material {
   public:
-    metal(const color& albedo, float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
+    __host__ __device__ metal(const color& albedo, float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
 
-    bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
         vec3 reflected = reflect(r_in.direction(), rec.normal);
         reflected = unit_vector(reflected) + (fuzz * random_unit_vector());
@@ -85,9 +85,9 @@ class metal : public material {
 
 class dielectric : public material {
   public:
-    dielectric(float refraction_index) : refraction_index(refraction_index) {}
+    __host__ __device__ dielectric(float refraction_index) : refraction_index(refraction_index) {}
 
-    bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
         attenuation = color(1.0, 1.0, 1.0);
         float ri = rec.front_face ? (1.0/refraction_index) : refraction_index;
@@ -113,7 +113,7 @@ class dielectric : public material {
     // the refractive index of the enclosing media
     float refraction_index;
 
-    static float reflectance(float cosine, float refraction_index) {
+    __host__ __device__ static float reflectance(float cosine, float refraction_index) {
         // Use Schlick's approximation for reflectance.
         auto r0 = (1 - refraction_index) / (1 + refraction_index);
         r0 = r0*r0;
@@ -124,20 +124,20 @@ class dielectric : public material {
 
 class diffuse_light : public material {
   public:
-    diffuse_light(texture* tex) : tex(tex) {}
-    diffuse_light(const color& emit) {
+    __host__ __device__ diffuse_light(texture* tex) : tex(tex) {}
+    __host__ __device__ diffuse_light(const color& emit) {
         color_tex = solid_color(emit);
         tex = &color_tex;
     }
 
-    color emitted(float u, float v, const point3& p) const override {
+    __host__ __device__ color emitted(float u, float v, const point3& p) const override {
         return tex->value(u, v, p);
     }
-    diffuse_light(const diffuse_light& other) {
+    __host__ __device__ diffuse_light(const diffuse_light& other) {
         *this = other;
     }
 
-    diffuse_light& operator=(const diffuse_light& other) {
+    __host__ __device__ diffuse_light& operator=(const diffuse_light& other) {
         if (this != &other) {
             tex = other.tex;
             if (tex == &other.color_tex) {
@@ -156,23 +156,23 @@ class diffuse_light : public material {
 
 class isotropic : public material {
   public:
-    isotropic(const color& albedo) {
+    __host__ __device__ isotropic(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
     }
-    isotropic(texture* tex) : tex(tex) {}
+    __host__ __device__ isotropic(texture* tex) : tex(tex) {}
 
-    bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
+    __host__ __device__ bool scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered)
     const override {
         scattered = ray(rec.p, random_unit_vector());
         attenuation = tex->value(rec.u, rec.v, rec.p);
         return true;
     }
-    isotropic(const isotropic& other) {
+    __host__ __device__ isotropic(const isotropic& other) {
         *this = other;
     }
 
-    isotropic& operator=(const isotropic& other) {
+    __host__ __device__ isotropic& operator=(const isotropic& other) {
         if (this != &other) {
             tex = other.tex;
             if (tex == &other.color_tex) {

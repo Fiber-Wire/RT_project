@@ -31,23 +31,22 @@ class hit_record {
 
 class hittable {
   public:
-    virtual ~hittable() = default;
 
-    virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
+    __host__ __device__ virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
 
-    virtual aabb bounding_box() const = 0;
+    __host__ __device__ virtual aabb bounding_box() const = 0;
 };
 
 
 class translate : public hittable {
   public:
-    translate(hittable *object, const vec3& offset)
+    __host__ __device__ translate(hittable *object, const vec3& offset)
       : object(object), offset(offset)
     {
         bbox = object->bounding_box() + offset;
     }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         // Move the ray backwards by the offset
         ray offset_r(r.origin() - offset, r.direction());
 
@@ -61,7 +60,7 @@ class translate : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
     hittable* object;
@@ -72,14 +71,14 @@ class translate : public hittable {
 
 class rotate_y : public hittable {
   public:
-    rotate_y(hittable* object, float angle) : object(object) {
+    __host__ __device__ rotate_y(hittable* object, float angle) : object(object) {
         auto radians = degrees_to_radians(angle);
         sin_theta = std::sin(radians);
         cos_theta = std::cos(radians);
         bbox = object->bounding_box();
 
-        point3 min( infinity,  infinity,  infinity);
-        point3 max(-infinity, -infinity, -infinity);
+        point3 min( INFINITY,  INFINITY,  INFINITY);
+        point3 max(-INFINITY, -INFINITY, -INFINITY);
 
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {
@@ -104,7 +103,7 @@ class rotate_y : public hittable {
         bbox = aabb(min, max);
     }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
 
         // Transform the ray from world space to object space.
 
@@ -144,7 +143,7 @@ class rotate_y : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
     hittable* object;

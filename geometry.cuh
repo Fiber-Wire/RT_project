@@ -11,14 +11,14 @@
 class sphere : public hittable {
   public:
     // Stationary Sphere
-    sphere(const point3& static_center, float radius, material* mat)
+    __host__ __device__ sphere(const point3& static_center, float radius, material* mat)
       : center(static_center, vec3(0,0,0)), radius(std::fmax(0,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
         bbox = aabb(static_center - rvec, static_center + rvec);
     }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         point3 current_center = center.origin();
         vec3 oc = current_center - r.origin();
         auto a = glm::dot(r.direction(), r.direction());
@@ -49,7 +49,7 @@ class sphere : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
     ray center;
@@ -57,7 +57,7 @@ class sphere : public hittable {
     material* mat;
     aabb bbox;
 
-    static void get_sphere_uv(const point3& p, float& u, float& v) {
+    __host__ __device__ static void get_sphere_uv(const point3& p, float& u, float& v) {
         // p: a given point on the sphere of radius one, centered at the origin.
         // u: returned value [0,1] of angle around the Y axis from X=-1.
         // v: returned value [0,1] of angle from Y=-1 to Y=+1.
@@ -74,7 +74,7 @@ class sphere : public hittable {
 };
 class quad : public hittable {
   public:
-    quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
+    __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
       : Q(Q), u(u), v(v), mat(mat)
     {
         auto n = cross(u, v);
@@ -85,16 +85,16 @@ class quad : public hittable {
         set_bounding_box();
     }
 
-    virtual void set_bounding_box() {
+    __host__ __device__ virtual void set_bounding_box() {
         // Compute the bounding box of all four vertices.
         auto bbox_diagonal1 = aabb(Q, Q + u + v);
         auto bbox_diagonal2 = aabb(Q + u, Q + v);
         bbox = aabb(bbox_diagonal1, bbox_diagonal2);
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         auto denom = dot(normal, r.direction());
 
         // No hit if the ray is parallel to the plane.
@@ -124,7 +124,7 @@ class quad : public hittable {
         return true;
     }
 
-    virtual bool is_interior(float a, float b, hit_record& rec) const {
+    __host__ __device__ virtual bool is_interior(float a, float b, hit_record& rec) const {
         interval unit_interval = interval(0, 1);
         // Given the hit point in plane coordinates, return false if it is outside the
         // primitive, otherwise set the hit record UV coordinates and return true.
@@ -148,7 +148,7 @@ class quad : public hittable {
 };
 
 
-inline hittable_list* create_box(const point3& a, const point3& b, material* mat)
+__host__ __device__ inline hittable_list* create_box(const point3& a, const point3& b, material* mat)
 {
     // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
 

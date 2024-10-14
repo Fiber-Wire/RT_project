@@ -73,7 +73,12 @@ class aabb {
             return y.size() > z.size() ? 1 : 2;
     }
 
-    static const aabb empty, universe;
+    __host__ __device__ static aabb empty() {
+        return {interval::empty(),    interval::empty(),    interval::empty()};
+    }
+    __host__ __device__ static aabb universe() {
+        return {interval::universe(),    interval::universe(),    interval::universe()};
+    }
 
   private:
 
@@ -87,8 +92,6 @@ class aabb {
     }
 };
 
-const aabb aabb::empty    = aabb(interval::empty,    interval::empty,    interval::empty);
-const aabb aabb::universe = aabb(interval::universe, interval::universe, interval::universe);
 
 __host__ __device__ aabb operator+(const aabb& bbox, const vec3& offset) {
     return aabb(bbox.x + offset.x, bbox.y + offset.y, bbox.z + offset.z);

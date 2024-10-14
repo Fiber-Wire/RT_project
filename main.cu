@@ -12,6 +12,7 @@
 #include "material.cuh"
 #include "geometry.cuh"
 #include "texture.cuh"
+#include "curand.h"
 
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
@@ -143,7 +144,7 @@ hittable_list final_scene_build() {
     return world;
 }
 
-hittable_list debug_scene_build() {
+__host__ __device__ hittable_list debug_scene_build() {
     hittable_list boxes1{4};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
@@ -178,7 +179,14 @@ hittable_list debug_scene_build() {
     return world;
 }
 
-camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
+__global__ void debug_scene_build_cuda(hittable_list* world_ptr) {
+    auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        *world_ptr = debug_scene_build();
+    }
+}
+
+__host__ __device__ camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
     camera cam;
 
     cam.aspect_ratio      = 1.0;
@@ -194,6 +202,13 @@ camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
     return cam;
 }
 
+__global__ void final_camera_cuda(int image_width, int samples_per_pixel, int max_depth, camera* cam) {
+    auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        *cam = final_camera(image_width, samples_per_pixel, max_depth);
+    }
+}
+
 void render_scene(const hittable_list &scene, camera &cam) {
     cam.render(scene);
 }
@@ -205,6 +220,34 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
             mainRendererComm.frame_rendered.release();
         }
     }
+}
+
+__global__ void camera_render_cuda(camera* cam, const hittable_list* scene, std::span<unsigned int> image) {
+    auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    auto gridSize = blockDim.x * gridDim.x;
+    auto width = cam->image_width;
+    for (unsigned int pixelId = tid; pixelId < image.size(); pixelId+=gridSize) {
+        image[pixelId] = cam->render_pixel(scene, pixelId/width, pixelId%width);
+    }
+}
+
+void render_thread_cuda(const camera& cam, camera* cam_cuda, const hittable_list* scene_cuda, std::span<unsigned int> image) {
+    int height = int(cam.image_width/cam.aspect_ratio);
+    int width  = cam.image_width;
+    unsigned int* imageGpuPtr{};
+    cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
+    std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
+    while (!mainRendererComm.stop_render.load()) {
+        if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
+            //cam.render_parallel(scene, image);
+            camera_render_cuda<<<64,64>>>(cam_cuda, scene_cuda, imageGpu);
+            cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
+            cudaDeviceSynchronize();
+            utils::cu_check();
+            mainRendererComm.frame_rendered.release();
+        }
+    }
+    cudaFree(imageGpuPtr);
 }
 
 void render_scene_realtime(hittable_list &scene, camera &cam) {
@@ -241,16 +284,61 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
+void render_scene_realtime_cuda(hittable_list* scene, camera &cam, camera *cam_cuda) {
+    int height = int(cam.image_width/cam.aspect_ratio);
+    auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
+    auto renderer = sdl_raii::Renderer{window.get()};
+    auto surface = sdl_raii::Surface{cam.image_width, height};
+    auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
+    std::promise<void> render_finished;
+    std::future<void> render_finished_future = render_finished.get_future();
+    std::thread{[=, &render_finished, &cam, &scene] {
+        //render_thread_cuda(cam, cam_cuda, scene, image);
+        render_finished.set_value_at_thread_exit();
+    }}.detach();
+    mainRendererComm.frame_start_render.release();
+    auto t0 = std::chrono::steady_clock::now();
+    while (!want_exit_sdl())
+    {
+        if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
+            auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
+            SDL_RenderClear(renderer.get());
+            SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
+            SDL_RenderPresent(renderer.get());
+            auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
+            mainRendererComm.frame_start_render.release();
+            t0 = std::chrono::steady_clock::now();
+        }
+    }
+    notify_renderer_exit();
+    while(render_finished_future.wait_for(std::chrono::milliseconds{5})==std::future_status::timeout) {
+        want_exit_sdl();
+    }
+    render_finished_future.wait();
+    // we don't do the cleanup yet
+    cudaDeviceReset();
+}
+
 
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
+    hittable_list* sceneGpuPtr{};
+    cudaMalloc(&sceneGpuPtr, sizeof(hittable_list));
+    camera* camGpuPtr{};
+    cudaMalloc(&camGpuPtr, sizeof(camera));
+    debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr);
+    final_camera_cuda<<<1,1>>>(400, 50, 4, camGpuPtr);
+    cudaDeviceSynchronize();
+    utils::cu_check();
     auto scene = final_scene_build();
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);
     } else {
         render_scene_realtime(scene, cam);
+        //render_scene_realtime_cuda(sceneGpuPtr, cam, camGpuPtr);
     }
     return 0;
 }

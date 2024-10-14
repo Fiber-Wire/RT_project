@@ -10,17 +10,17 @@
 
 class bvh_node : public hittable {
   public:
-    bvh_node(): bbox(aabb::universe) {}
-    bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
+    __host__ __device__ bvh_node(): bbox(aabb::universe()) {}
+    __host__ __device__ bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
         // There's a C++ subtlety here. This constructor (without span indices) creates an
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to
         // persist the resulting bounding volume hierarchy.
     }
 
-    bvh_node(std::span<hittable*> objects, size_t start, size_t end) {
+    __host__ __device__ bvh_node(std::span<hittable*> objects, size_t start, size_t end) {
         // Build the bounding box of the span of source objects.
-        bbox = aabb::empty;
+        bbox = aabb::empty();
         for (size_t object_index=start; object_index < end; object_index++)
             bbox = aabb(bbox, objects[object_index]->bounding_box());
 
@@ -49,7 +49,7 @@ class bvh_node : public hittable {
         }
     }
 
-    ~bvh_node() override {
+    __host__ __device__ ~bvh_node() {
         if (left_bvh) {
             delete left;
             left_bvh = false;
@@ -60,30 +60,30 @@ class bvh_node : public hittable {
         }
     }
 
-    bvh_node(const bvh_node& other) {
+    __host__ __device__ bvh_node(const bvh_node& other) {
         *this = other;
     }
 
-    bvh_node& operator=(const bvh_node& other) {
+    __host__ __device__ bvh_node& operator=(const bvh_node& other) {
         if (this != &other) {
             bbox = other.bbox;
             left = other.left;
             right = other.right;
             if (other.left_bvh) {
                 left = new bvh_node{};
-                *dynamic_cast<bvh_node*>(left) = *dynamic_cast<bvh_node*>(other.left);
+                *(bvh_node*)(left) = *(bvh_node*)(other.left);
                 left_bvh = true;
             }
             if (other.right_bvh) {
                 right = new bvh_node{};
-                *dynamic_cast<bvh_node*>(right) = *dynamic_cast<bvh_node*>(other.right);
+                *(bvh_node*)(right) = *(bvh_node*)(other.right);
                 right_bvh = true;
             }
         }
         return *this;
     }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         if (!bbox.hit(r, ray_t))
             return false;
 
@@ -93,7 +93,7 @@ class bvh_node : public hittable {
         return hit_left || hit_right;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
     hittable* left{};
@@ -102,7 +102,7 @@ class bvh_node : public hittable {
     bool right_bvh{false};
     aabb bbox;
 
-    static bool box_compare(
+    __host__ __device__ static bool box_compare(
         const hittable* a, const hittable* b, int axis_index
     ) {
         auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
@@ -110,15 +110,15 @@ class bvh_node : public hittable {
         return a_axis_interval.min < b_axis_interval.min;
     }
 
-    static bool box_x_compare (const hittable* a, const hittable* b) {
+    __host__ __device__ static bool box_x_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 0);
     }
 
-    static bool box_y_compare (const hittable* a, const hittable* b) {
+    __host__ __device__ static bool box_y_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 1);
     }
 
-    static bool box_z_compare (const hittable* a, const hittable* b) {
+    __host__ __device__ static bool box_z_compare (const hittable* a, const hittable* b) {
         return box_compare(a, b, 2);
     }
 };

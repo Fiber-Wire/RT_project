@@ -4,26 +4,22 @@
 #include "aabb.cuh"
 #include "hittable.cuh"
 
-#include <vector>
-
-
 class hittable_list : public hittable {
   public:
-    //std::vector<hittable*> objects;
     hittable** objects{};
     int count{};
     int capacity{};
 
-    explicit hittable_list(const int capacity) : capacity(capacity) {
+    __host__ __device__ explicit hittable_list(const int capacity) : capacity(capacity) {
         objects = new hittable*[capacity];
         are_hitlist = new bool[capacity];
     }
 
-    explicit hittable_list(hittable* object) { add(object); }
+    __host__ __device__ explicit hittable_list(hittable* object) { add(object); }
     hittable_list(const hittable_list& other) {
         *this = other;
     }
-    hittable_list& operator=(const hittable_list& other) {
+    __host__ __device__ hittable_list& operator=(const hittable_list& other) {
         if (this != &other) {
             capacity = other.capacity;
             delete[] objects;
@@ -39,14 +35,14 @@ class hittable_list : public hittable {
             for (int i = 0; i < count; i++) {
                 if (are_hitlist[i]) {
                     objects[i] = new hittable_list{other.capacity};
-                    *dynamic_cast<hittable_list*>(objects[i]) = *dynamic_cast<hittable_list*>(other.objects[i]);
+                    *(hittable_list*)(objects[i]) = *(hittable_list*)(other.objects[i]);
                 }
             }
         }
         return *this;
     }
 
-    void clear() {
+    __host__ __device__ void clear() {
         delete[] objects;
         delete[] are_hitlist;
         count = 0;
@@ -54,11 +50,11 @@ class hittable_list : public hittable {
         are_hitlist = new bool[capacity];
     }
 
-    std::span<hittable*> get_objects() {
+    __host__ __device__ std::span<hittable*> get_objects() {
         return {objects, static_cast<size_t>(count)};
     }
 
-    void add(hittable* object) {
+    __host__ __device__ void add(hittable* object) {
         if (count < capacity) {
             objects[count] = object;
             are_hitlist[count] = false;
@@ -68,7 +64,7 @@ class hittable_list : public hittable {
 
     }
 
-    void add(hittable_list* list) {
+    __host__ __device__ void add(hittable_list* list) {
         if (count < capacity) {
             objects[count] = list;
             are_hitlist[count] = true;
@@ -78,7 +74,7 @@ class hittable_list : public hittable {
 
     }
 
-    bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         hit_record temp_rec;
         bool hit_anything = false;
         auto closest_so_far = ray_t.max;
@@ -95,7 +91,14 @@ class hittable_list : public hittable {
         return hit_anything;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return bbox; }
+
+    __host__ __device__ ~hittable_list() {
+        delete[] are_hitlist;
+        delete[] objects;
+        capacity = 0;
+        count = 0;
+    }
 
   private:
     aabb bbox;
