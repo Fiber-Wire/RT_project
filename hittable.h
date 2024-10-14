@@ -22,9 +22,9 @@ class hit_record {
     point3 p;
     vec3 normal;
     material* mat;
-    double t;
-    double u;
-    double v;
+    float t;
+    float u;
+    float v;
     bool front_face;
 
     void set_face_normal(const ray& r, const vec3& outward_normal) {
@@ -80,7 +80,7 @@ class translate : public hittable {
 
 class rotate_y : public hittable {
   public:
-    rotate_y(hittable* object, double angle) : object(object) {
+    rotate_y(hittable* object, float angle) : object(object) {
         auto radians = degrees_to_radians(angle);
         sin_theta = std::sin(radians);
         cos_theta = std::cos(radians);
@@ -156,8 +156,8 @@ class rotate_y : public hittable {
 
   private:
     hittable* object;
-    double sin_theta;
-    double cos_theta;
+    float sin_theta;
+    float cos_theta;
     aabb bbox;
 };
 

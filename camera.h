@@ -18,18 +18,18 @@
 
 class camera {
   public:
-    double aspect_ratio      = 1.0;  // Ratio of image width over height
+    float aspect_ratio      = 1.0;  // Ratio of image width over height
     int    image_width       = 100;  // Rendered image width in pixel count
     int    samples_per_pixel = 10;   // Count of random samples for each pixel
     int    max_depth         = 10;   // Maximum number of ray bounces into scene
     color  background;               // Scene background color
 
-    double vfov     = 90;              // Vertical view angle (field of view)
+    float vfov     = 90;              // Vertical view angle (field of view)
     point3 lookfrom = point3(0,0,0);   // Point camera is looking from
     point3 lookat   = point3(0,0,-1);  // Point camera is looking at
     vec3   vup      = vec3(0,1,0);     // Camera-relative "up" direction
 
-    double focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
+    float focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
     void render(const hittable& world) {
         initialize();
@@ -92,7 +92,7 @@ class camera {
 
   private:
     int    image_height;         // Rendered image height
-    double pixel_samples_scale;  // Color scale factor for a sum of pixel samples
+    float pixel_samples_scale;  // Color scale factor for a sum of pixel samples
     point3 center;               // Camera center
     point3 pixel00_loc;          // Location of pixel 0, 0
     vec3   pixel_delta_u;        // Offset to pixel to the right
@@ -111,7 +111,7 @@ class camera {
         auto theta = degrees_to_radians(vfov);
         auto h = std::tan(theta/2);
         auto viewport_height = 2 * h * focus_dist;
-        auto viewport_width = viewport_height * (double(image_width)/image_height);
+        auto viewport_width = viewport_height * (float(image_width)/image_height);
 
         // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
         w = unit_vector(lookfrom - lookat);
@@ -149,7 +149,7 @@ class camera {
 
     vec3 sample_square() const {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
-        return vec3(random_double() - 0.5, random_double() - 0.5, 0);
+        return vec3(random_float() - 0.5, random_float() - 0.5, 0);
     }
 
     color ray_color(const ray& r, int depth, const hittable& world) const {

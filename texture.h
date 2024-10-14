@@ -18,7 +18,7 @@ class texture {
   public:
     virtual ~texture() = default;
 
-    virtual color value(double u, double v, const point3& p) const = 0;
+    virtual color value(float u, float v, const point3& p) const = 0;
 };
 
 
@@ -26,9 +26,9 @@ class solid_color : public texture {
   public:
     solid_color(const color& albedo) : albedo(albedo) {}
 
-    solid_color(double red, double green, double blue) : solid_color(color(red,green,blue)) {}
+    solid_color(float red, float green, float blue) : solid_color(color(red,green,blue)) {}
 
-    color value(double u, double v, const point3& p) const override {
+    color value(float u, float v, const point3& p) const override {
         return albedo;
     }
 
@@ -39,10 +39,10 @@ class solid_color : public texture {
 
 class checker_texture : public texture {
   public:
-    checker_texture(double scale, texture* even, texture* odd)
+    checker_texture(float scale, texture* even, texture* odd)
       : inv_scale(1.0 / scale), even(even), odd(odd) {}
 
-    checker_texture(double scale, const color& c1, const color& c2)
+    checker_texture(float scale, const color& c1, const color& c2)
       : inv_scale(1 / scale) {
       color_even = solid_color(c1);
       color_odd = solid_color(c2);
@@ -50,7 +50,7 @@ class checker_texture : public texture {
       odd = &color_odd;
     }
 
-    color value(double u, double v, const point3& p) const override {
+    color value(float u, float v, const point3& p) const override {
         auto xInteger = int(std::floor(inv_scale * p.x()));
         auto yInteger = int(std::floor(inv_scale * p.y()));
         auto zInteger = int(std::floor(inv_scale * p.z()));
@@ -61,7 +61,7 @@ class checker_texture : public texture {
     }
 
   private:
-    double inv_scale;
+    float inv_scale;
     texture* even;
     texture* odd;
     solid_color color_even{{0.5,0,0.5}};;
@@ -73,7 +73,7 @@ class image_texture : public texture {
   public:
     image_texture(const char* filename) : image(filename) {}
 
-    color value(double u, double v, const point3& p) const override {
+    color value(float u, float v, const point3& p) const override {
         // If we have no texture data, then return solid cyan as a debugging aid.
         if (image.height() <= 0) return color(0,1,1);
 

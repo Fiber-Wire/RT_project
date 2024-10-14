@@ -17,7 +17,7 @@
 class sphere : public hittable {
   public:
     // Stationary Sphere
-    sphere(const point3& static_center, double radius, material* mat)
+    sphere(const point3& static_center, float radius, material* mat)
       : center(static_center, vec3(0,0,0)), radius(std::fmax(0,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
@@ -59,11 +59,11 @@ class sphere : public hittable {
 
   private:
     ray center;
-    double radius;
+    float radius;
     material* mat;
     aabb bbox;
 
-    static void get_sphere_uv(const point3& p, double& u, double& v) {
+    static void get_sphere_uv(const point3& p, float& u, float& v) {
         // p: a given point on the sphere of radius one, centered at the origin.
         // u: returned value [0,1] of angle around the Y axis from X=-1.
         // v: returned value [0,1] of angle from Y=-1 to Y=+1.

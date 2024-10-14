@@ -106,7 +106,7 @@ hittable_list final_scene_build() {
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
             auto x1 = x0 + w;
-            auto y1 = random_double(1,101);
+            auto y1 = random_float(1,101);
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
@@ -167,7 +167,7 @@ hittable_list debug_scene_build() {
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
             auto x1 = x0 + w;
-            auto y1 = random_double(1,101);
+            auto y1 = random_float(1,101);
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
@@ -257,7 +257,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
-    auto scene = debug_scene_build();
+    auto scene = final_scene_build();
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);
