@@ -26,11 +26,13 @@ set ( SOURCE_RT_PROJECT
 )
 find_package(SDL2 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(glm CONFIG REQUIRED)
 add_library(commons_headers INTERFACE)
 target_include_directories(commons_headers INTERFACE include)
 
 
 add_executable(RT_project  ${SOURCE_RT_PROJECT})
+target_link_libraries(RT_project PRIVATE glm::glm)
 target_link_libraries(RT_project PRIVATE commons_headers)
 target_link_libraries(commons_headers
         INTERFACE
