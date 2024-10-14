@@ -1,13 +1,5 @@
 #ifndef RTW_STB_IMAGE_H
 #define RTW_STB_IMAGE_H
-//==============================================================================================
-// To the extent possible under law, the author(s) have dedicated all copyright and related and
-// neighboring rights to this software to the public domain worldwide. This software is
-// distributed without any warranty.
-//
-// You should have received a copy (see file COPYING.txt) of the CC0 Public Domain Dedication
-// along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
-//==============================================================================================
 
 // Disable strict warnings for this header from the Microsoft Visual C++ compiler.
 #ifdef _MSC_VER
@@ -22,36 +14,22 @@
 #include <iostream>
 
 
-class rtw_image {
+class image_loader {
   public:
-    rtw_image() {}
+    image_loader() {}
 
-    rtw_image(const char* image_filename) {
-        // Loads image data from the specified file. If the RTW_IMAGES environment variable is
-        // defined, looks only in that directory for the image file. If the image was not found,
-        // searches for the specified image file first from the current directory, then in the
-        // images/ subdirectory, then the _parent's_ images/ subdirectory, and then _that_
-        // parent, on so on, for six levels up. If the image was not loaded successfully,
-        // width() and height() will return 0.
+    image_loader(const char* image_filename) {
+        // Loads image data from the specified file.
+        // If the image was not loaded successfully, width() and height() will return 0.
 
         auto filename = std::string(image_filename);
-        auto imagedir = getenv("RTW_IMAGES");
 
-        // Hunt for the image file in some likely locations.
-        if (imagedir && load(std::string(imagedir) + "/" + image_filename)) return;
-        if (load(filename)) return;
         if (load("images/" + filename)) return;
-        if (load("../images/" + filename)) return;
-        if (load("../../images/" + filename)) return;
-        if (load("../../../images/" + filename)) return;
-        if (load("../../../../images/" + filename)) return;
-        if (load("../../../../../images/" + filename)) return;
-        if (load("../../../../../../images/" + filename)) return;
 
         std::cerr << "ERROR: Could not load image file '" << image_filename << "'.\n";
     }
 
-    ~rtw_image() {
+    ~image_loader() {
         delete[] bdata;
         STBI_FREE(fdata);
     }

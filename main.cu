@@ -1,29 +1,17 @@
-//==============================================================================================
-// Originally written in 2016 by Peter Shirley <ptrshrl@gmail.com>
-//
-// To the extent possible under law, the author(s) have dedicated all copyright and related and
-// neighboring rights to this software to the public domain worldwide. This software is
-// distributed without any warranty.
-//
-// You should have received a copy (see file COPYING.txt) of the CC0 Public Domain Dedication
-// along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
-//==============================================================================================
-
 #include <future>
 #include <semaphore>
 #include <string>
 #include <thread>
 #include "sdl_wrapper.hpp"
-#include "rtweekend.h"
+#include "helpers.cuh"
 
-#include "bvh.h"
-#include "camera.h"
-#include "hittable.h"
-#include "hittable_list.h"
-#include "material.h"
-#include "quad.h"
-#include "sphere.h"
-#include "texture.h"
+#include "bvh.cuh"
+#include "camera.cuh"
+#include "hittable.cuh"
+#include "hittable_list.cuh"
+#include "material.cuh"
+#include "geometry.cuh"
+#include "texture.cuh"
 
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
@@ -257,7 +245,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
-    auto scene = debug_scene_build();
+    auto scene = final_scene_build();
     auto cam = final_camera(400, 50, 4);
     if (argc!=1) {
         render_scene(scene, cam);

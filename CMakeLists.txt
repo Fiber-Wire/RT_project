@@ -6,23 +6,22 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
 
 set ( SOURCE_RT_PROJECT
-        main.cc
-        aabb.h
-        bvh.h
-        camera.h
-        hittable.h
-        hittable_list.h
-        material.h
-        quad.h
-        sphere.h
-        texture.h
+        main.cu
+        aabb.cuh
+        bvh.cuh
+        camera.cuh
+        hittable.cuh
+        hittable_list.cuh
+        material.cuh
+        geometry.cuh
+        texture.cuh
         .manifest
-        color.h
-        interval.h
-        ray.h
-        rtw_stb_image.h
-        rtweekend.h
-        vec3.h
+        color.cuh
+        interval.cuh
+        image_loader.cuh
+        helpers.cuh
+        vec3.cuh
+        ray.cuh
 )
 find_package(SDL2 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
