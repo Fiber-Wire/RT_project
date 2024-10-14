@@ -82,10 +82,10 @@ void cornell_box() {
 
 
 hittable_list final_scene_build() {
-    hittable_list boxes1{5000};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 20;
+    hittable_list boxes1{boxes_per_side*boxes_per_side};
     //////// vector<hittable*> all_boxes3
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
@@ -102,7 +102,7 @@ hittable_list final_scene_build() {
         }
     }
 
-    hittable_list world{5000};
+    hittable_list world{7};
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
@@ -128,9 +128,9 @@ hittable_list final_scene_build() {
     auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
     world.add(lambertian_emat_sphere_1);
 
-    hittable_list boxes2{5000};
-    auto white = new lambertian(color(.73, .73, .73));
     int ns = 1000;
+    hittable_list boxes2{ns};
+    auto white = new lambertian(color(.73, .73, .73));
     for (int j = 0; j < ns; j++) {
         auto boxes2_sphere = new sphere(random_in_cube(0, 165), 10, white);
         boxes2.add(boxes2_sphere);
@@ -144,7 +144,7 @@ hittable_list final_scene_build() {
 }
 
 hittable_list debug_scene_build() {
-    hittable_list boxes1{5000};
+    hittable_list boxes1{4};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
 
     int boxes_per_side = 2;
@@ -163,7 +163,7 @@ hittable_list debug_scene_build() {
         }
     }
 
-    hittable_list world{5000};
+    hittable_list world{3};
 
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
