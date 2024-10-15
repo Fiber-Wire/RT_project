@@ -83,6 +83,45 @@ namespace utils {
     inline void cu_check(const std::source_location& location = std::source_location::current()) {
         cu_ensure(cudaGetLastError(), "cu_check: ", location);
     }
+
+    template <int number>
+    consteval unsigned int integer_log2() {
+        if constexpr (number==1) {
+            return 0;
+        }
+        if constexpr (number==2) {
+            return 1;
+        }
+        if constexpr (number==4) {
+            return 2;
+        }
+        if constexpr (number==8) {
+            return 3;
+        }
+        if constexpr (number==16) {
+            return 4;
+        }
+        if constexpr (number==32) {
+            return 5;
+        } else {
+            //static_assert(false);
+            return 0;
+        }
+    }
+
+    template <int threads_per_work=1>
+    __host__ __device__ unsigned int tId_to_workId(const unsigned int tid) {
+        return tid>>integer_log2<threads_per_work>();
+    }
+    template <int threads_per_work=1>
+    __host__ __device__ unsigned int tId_to_warp_mask(const unsigned int tid) {
+        unsigned int laneId = tid & 0x1f;
+        // 0...0        1...1       0...0
+        // left threads_per_work    right
+        unsigned int right_bits = tId_to_workId<threads_per_work>(laneId)*threads_per_work;
+        unsigned int left_bits = 32-(right_bits+threads_per_work);
+        return (0xffffffff>>right_bits<<right_bits) & (0xffffffff<<left_bits>>left_bits);
+    }
 #endif
     /// helper template to construct move-only class
     /// Usage: class Derived : private NonCopyable<Derived> {...}, or consult C++ CRTP

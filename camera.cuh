@@ -4,6 +4,7 @@
 #include "hittable.cuh"
 #include "material.cuh"
 #include <span>
+#include <utils.hpp>
 
 
 class camera {
@@ -46,6 +47,23 @@ class camera {
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(i, j, rnd);
             pixel_color += ray_color(r, max_depth, world, rnd);
+        }
+        return pixel_from_color(pixel_samples_scale * pixel_color);
+    }
+
+    __device__ unsigned int render_pixel(const hittable* world, const int j, const int i, curandState *rnd,
+        int thread_per_pixel, int thread_index) {
+        color pixel_color(0,0,0);
+        for (int sample = thread_index; sample < samples_per_pixel; sample+=thread_per_pixel) {
+            ray r = get_ray(i, j, rnd);
+            pixel_color += ray_color(r, max_depth, world, rnd);
+        }
+        __syncwarp();
+        //__syncthreads();
+        for (int shfl_dist = thread_per_pixel/2; shfl_dist>0; shfl_dist/=2) {
+            pixel_color.x += __shfl_xor_sync(utils::tId_to_warp_mask<32>(threadIdx.x), pixel_color.x, shfl_dist);
+            pixel_color.y += __shfl_xor_sync(utils::tId_to_warp_mask<32>(threadIdx.x), pixel_color.y, shfl_dist);
+            pixel_color.z += __shfl_xor_sync(utils::tId_to_warp_mask<32>(threadIdx.x), pixel_color.z, shfl_dist);
         }
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }

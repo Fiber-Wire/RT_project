@@ -14,8 +14,8 @@
 #include "texture.cuh"
 #include "curand.h"
 #include "curand_kernel.h"
-#define BLOCKDIM_X 64
-#define GRIDDIM_X 64
+#define BLOCKDIM_X 32
+#define GRIDDIM_X 1024
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
     std::binary_semaphore frame_rendered{0};
@@ -147,14 +147,14 @@ hittable_list final_scene_build() {
 }
 
 __host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
-    hittable_list boxes1{4};
+    hittable_list boxes1{16};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
     hittable_list world{3};
 
-    int boxes_per_side = 2;
+    int boxes_per_side = 4;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 800.0;
+            auto w = 400.0;
             auto x0 = -1000.0 + i*w;
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
@@ -230,19 +230,21 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
 
 __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    // only use 1, 2, 4, ..., 32, remember to modify template parameter in cam->render_pixel() as well.
+    constexpr auto threadPerPixel = 32;
     if (tid==0) {
         cam->initialize();
     }
+    __syncthreads();
     auto gridSize = blockDim.x * gridDim.x;
     auto width = cam->image_width;
     auto scene = *scenepptr;
-    for (unsigned int pixelId = tid; pixelId < image.size(); pixelId+=gridSize) {
-        image[pixelId] = cam->render_pixel(scene, pixelId/width, pixelId%width, devStates+tid);
-        // if (tid==230) {
-        //     printf("{%i, %i}: (%u, %u, %u)\n",
-        //         (int)pixelId/width, (int)pixelId%width,
-        //         (image[pixelId]>>16)%256, (image[pixelId]>>8)%256, image[pixelId]%256);
-        // }
+    for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
+        auto pixel_result = cam->render_pixel(scene, pixelId/width, pixelId%width, &devStates[tid],
+            threadPerPixel, tid%threadPerPixel);
+        if (tid%threadPerPixel == 0) {
+            image[pixelId] = pixel_result;
+        }
     }
 }
 
@@ -351,12 +353,11 @@ int main(int argc, char* argv[]) {
     debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr, devStates);
     cudaDeviceSynchronize();
     utils::cu_check();
-    // FIXME: camera::ray_color() causes stackoverflow on CUDA
-    final_camera_cuda<<<1,1>>>(400, 50, 4, camGpuPtr);
+    final_camera_cuda<<<1,1>>>(400, 32, 4, camGpuPtr);
     cudaDeviceSynchronize();
     utils::cu_check();
     auto scene = debug_scene_build(nullptr);
-    auto cam = final_camera(400, 50, 4);
+    auto cam = final_camera(400, 32, 4);
     if (argc!=1) {
         render_scene(scene, cam);
     } else {
