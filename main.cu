@@ -230,8 +230,9 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
 
 __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
-    // only use 1, 2, 4, ..., 32, remember to modify template parameter in cam->render_pixel() as well.
+    // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
+    static_assert(threadPerPixel<=BLOCKDIM_X);
     if (tid==0) {
         cam->initialize();
     }
@@ -240,8 +241,7 @@ __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::
     auto width = cam->image_width;
     auto scene = *scenepptr;
     for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
-        auto pixel_result = cam->render_pixel(scene, pixelId/width, pixelId%width, &devStates[tid],
-            threadPerPixel, tid%threadPerPixel);
+        auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devStates[tid], tid%threadPerPixel);
         if (tid%threadPerPixel == 0) {
             image[pixelId] = pixel_result;
         }
