@@ -13,6 +13,15 @@
 #include <cstdlib>
 #include <iostream>
 
+struct image_record {
+    unsigned char* image_data{};
+    int image_width = 0;
+    int image_height = 0;
+    int bytes_per_pixel = 3;
+    __device__ __host__ int bytes_per_scanline() const {
+        return bytes_per_pixel * image_width;
+    }
+};
 
 class image_loader {
   public:
@@ -31,7 +40,7 @@ class image_loader {
 
     ~image_loader() {
         delete[] bdata;
-        STBI_FREE(fdata);
+        cudaFree(bdata_cuda);
     }
 
     bool load(const std::string& filename) {
@@ -45,33 +54,48 @@ class image_loader {
         fdata = stbi_loadf(filename.c_str(), &image_width, &image_height, &n, bytes_per_pixel);
         if (fdata == nullptr) return false;
 
-        bytes_per_scanline = image_width * bytes_per_pixel;
         convert_to_bytes();
+        STBI_FREE(fdata);
+        fdata = nullptr;
         return true;
     }
 
-    int width()  const { return (fdata == nullptr) ? 0 : image_width; }
-    int height() const { return (fdata == nullptr) ? 0 : image_height; }
+    int width()  const { return (bdata == nullptr) ? 0 : image_width; }
+    int height() const { return (bdata == nullptr) ? 0 : image_height; }
 
-    const unsigned char* pixel_data(int x, int y) const {
-        // Return the address of the three RGB bytes of the pixel at x,y. If there is no image
-        // data, returns magenta.
-        static unsigned char magenta[] = { 255, 0, 255 };
-        if (bdata == nullptr) return magenta;
+    image_record get_record() const {
+        image_record record;
+        record.image_data = bdata;
+        record.image_width = image_width;
+        record.image_height = image_height;
+        record.bytes_per_pixel = bytes_per_pixel;
+        return record;
+    }
 
-        x = clamp(x, 0, image_width);
-        y = clamp(y, 0, image_height);
-
-        return bdata + y*bytes_per_scanline + x*bytes_per_pixel;
+    image_record get_record_cuda() {
+        image_copy_to_cuda();
+        image_record record_cuda;
+        record_cuda.image_data = bdata_cuda;
+        record_cuda.image_width = image_width;
+        record_cuda.image_height = image_height;
+        record_cuda.bytes_per_pixel = bytes_per_pixel;
+        return record_cuda;
     }
 
   private:
+    unsigned char* bdata_cuda{};
     const int      bytes_per_pixel = 3;
     float         *fdata = nullptr;         // Linear floating point pixel data
     unsigned char *bdata = nullptr;         // Linear 8-bit pixel data
     int            image_width = 0;         // Loaded image width
     int            image_height = 0;        // Loaded image height
-    int            bytes_per_scanline = 0;
+
+    void image_copy_to_cuda() {
+        if (bdata_cuda == nullptr) {
+            cudaMalloc(&bdata_cuda, image_width*image_height*bytes_per_pixel*sizeof(unsigned char));
+            cudaMemcpy(bdata_cuda,bdata,image_width*image_height*bytes_per_pixel*sizeof(unsigned char),cudaMemcpyHostToDevice);
+        }
+    }
 
     static int clamp(int x, int low, int high) {
         // Return the value clamped to the range [low, high).

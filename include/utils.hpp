@@ -19,6 +19,18 @@
 #include <ranges>
 #include <optional>
 namespace utils {
+    /// helper template to construct move-only class
+    /// Usage: class Derived : private NonCopyable<Derived> {...}, or consult C++ CRTP
+    template <class T>
+    class NonCopyable {
+    public:
+        NonCopyable (const NonCopyable &) = delete;
+        T & operator = (const T &) = delete;
+
+    protected:
+        NonCopyable () = default;
+        ~NonCopyable () = default; /// Protected non-virtual destructor
+    };
     enum class LogLevel{
         eVerbose,
         eLog,
@@ -61,6 +73,22 @@ namespace utils {
         log_and_pause<lvl>(prompt, 0, location);
     }
 #ifdef __CUDACC__
+    template <typename T>
+    class CuArrayRAII: private NonCopyable<CuArrayRAII<T>> {
+        public:
+        explicit CuArrayRAII(const T* src, const size_t n=1):n(n) {
+            cudaMalloc(&cudaPtr, sizeof(T) * n);
+            if (src != nullptr) {
+                cudaMemcpy(cudaPtr, src, sizeof(T) * n, cudaMemcpyHostToDevice);
+            }
+        }
+        ~CuArrayRAII() {
+            cudaFree(cudaPtr);
+        }
+        T* cudaPtr{};
+        size_t n;
+    };
+
     /// helper function to check results of CUDA API calls, pause 1 sec and emit log if not cudaSuccess
     /// Usage: cu_ensure(cudaAPICall(...))
     inline void cu_ensure(
@@ -123,17 +151,6 @@ namespace utils {
         return (0xffffffff>>right_bits<<right_bits) & (0xffffffff<<left_bits>>left_bits);
     }
 #endif
-    /// helper template to construct move-only class
-    /// Usage: class Derived : private NonCopyable<Derived> {...}, or consult C++ CRTP
-    template <class T>
-    class NonCopyable {
-    public:
-        NonCopyable (const NonCopyable &) = delete;
-        T & operator = (const T &) = delete;
 
-    protected:
-        NonCopyable () = default;
-        ~NonCopyable () = default; /// Protected non-virtual destructor
-    };
 }
 #endif //RT_PROJECT_UTILS_HPP

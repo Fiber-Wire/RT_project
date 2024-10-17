@@ -7,7 +7,7 @@
 
 class texture {
   public:
-    virtual ~texture() = default;
+    __host__ __device__ virtual ~texture() {}
 
     __host__ __device__ virtual color value(float u, float v, const point3& p) const = 0;
 };
@@ -62,26 +62,45 @@ class checker_texture : public texture {
 
 class image_texture : public texture {
   public:
-    image_texture(const char* filename) : image(filename) {}
+    __host__ __device__ explicit image_texture(const image_record &image_rd):image_rd(image_rd) {}
 
     __host__ __device__ color value(float u, float v, const point3& p) const override {
         // If we have no texture data, then return solid cyan as a debugging aid.
-        if (image.height() <= 0) return color(0,1,1);
+        if (image_rd.image_height <= 0) return color(0,1,1);
 
         // Clamp input texture coordinates to [0,1] x [1,0]
         u = interval(0,1).clamp(u);
         v = 1.0 - interval(0,1).clamp(v);  // Flip V to image coordinates
 
-        auto i = int(u * image.width());
-        auto j = int(v * image.height());
-        auto pixel = image.pixel_data(i,j);
+        auto i = int(u * image_rd.image_width);
+        auto j = int(v * image_rd.image_height);
+        auto pixel = pixel_data(i,j);
 
         auto color_scale = 1.0 / 255.0;
         return color(color_scale*pixel[0], color_scale*pixel[1], color_scale*pixel[2]);
     }
 
+    __host__ __device__ const unsigned char* pixel_data(int x, int y) const {
+        // Return the address of the three RGB bytes of the pixel at x,y. If there is no image
+        // data, returns magenta.
+        static unsigned char magenta[] = { 255, 0, 255 };
+        if (image_rd.image_data == nullptr) return magenta;
+
+        x = clamp(x, 0, image_rd.image_width);
+        y = clamp(y, 0, image_rd.image_height);
+
+        return image_rd.image_data + y*image_rd.bytes_per_scanline() + x*image_rd.bytes_per_pixel;
+      }
+
+    __host__ __device__ static int clamp(int x, int low, int high) {
+        // Return the value clamped to the range [low, high).
+        if (x < low) return low;
+        if (x < high) return x;
+        return high - 1;
+    }
+
   private:
-    image_loader image;
+    image_record image_rd{};
 };
 
 
