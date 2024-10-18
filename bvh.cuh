@@ -16,7 +16,7 @@ class bvh_node : public hittable {
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to
         // persist the resulting bounding volume hierarchy.
-        printf("build bvh with %i objs, depth %llu", list.count, depth);
+        printf("build bvh with %i objs, depth %llu\n", list.count, depth);
     }
 
     __host__ __device__ bvh_node(std::span<hittable*> objects, size_t start, size_t end) {
@@ -53,7 +53,7 @@ class bvh_node : public hittable {
                 std::sort(objects.begin()+start, objects.begin()+end,
                           [axis, this](const hittable* lhs, const hittable* rhs)
                             {return box_compare(lhs, rhs, axis);});
-#endif __CUDA_ARCH__
+#endif
             }
 
             auto mid = start + object_span/2;

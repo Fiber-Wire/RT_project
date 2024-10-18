@@ -15,8 +15,8 @@
 #include "curand.h"
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
-#define BLOCKDIM_X 32
-#define GRIDDIM_X 1024
+#define BLOCKDIM_X 64
+#define GRIDDIM_X (625*2)
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
     std::binary_semaphore frame_rendered{0};
@@ -178,7 +178,6 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     auto lambertian_emat = new lambertian(image_texture_emat);
     auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
     world.add(lambertian_emat_sphere_1);
-    // FIXME: bvh_node::hit() causes stackoverflow on CUDA
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
 
@@ -239,10 +238,11 @@ void render_scene(const hittable_list &scene, camera &cam) {
 
 void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
-        if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
+        if (mainRendererComm.frame_start_render.try_acquire()) {
             cam.render_parallel(scene, image);
             mainRendererComm.frame_rendered.release();
         }
+        std::this_thread::yield();
     }
 }
 
@@ -274,12 +274,12 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** sce
     cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
     std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
-        if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
+        if (mainRendererComm.frame_start_render.try_acquire()) {
             camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
-            cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
-            utils::cu_check();
+            utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
         }
+        std::this_thread::yield();
     }
     cudaFree(imageGpuPtr);
 }
