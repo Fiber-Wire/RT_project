@@ -11,7 +11,7 @@
 class bvh_node : public hittable {
   public:
     __host__ __device__ bvh_node(): bbox(aabb::empty()) {}
-    __host__ __device__ explicit bvh_node(hittable_list& list) : bvh_node(list.get_objects(), 0, list.count) {
+    __host__ __device__ explicit bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
         // There's a C++ subtlety here. This constructor (without span indices) creates an
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to
@@ -26,12 +26,7 @@ class bvh_node : public hittable {
 
         int axis = bbox.longest_axis();
 
-        auto comparator = (axis == 0) ? box_x_compare
-                        : (axis == 1) ? box_y_compare
-                                      : box_z_compare;
-
         size_t object_span = end - start;
-
         // TODO: add bvh_node detection, or split scene and bvh altogether
         if (object_span == 1) {
             left = right = objects[start];
@@ -39,7 +34,24 @@ class bvh_node : public hittable {
             left = objects[start];
             right = objects[start+1];
         } else {
-            std::sort(std::begin(objects) + start, std::begin(objects) + end, comparator);
+            {
+#ifdef __CUDA_ARCH__
+                // TODO: use a more efficient sorting method
+                for (size_t comp_index=start; comp_index < end-1; comp_index++) {
+                    for (size_t object_index=comp_index+1; object_index < end; object_index++) {
+                        if (!box_compare(objects[comp_index], objects[object_index], axis)) {
+                            const auto temp = objects[comp_index];
+                            objects[comp_index] = objects[object_index];
+                            objects[object_index] = temp;
+                        }
+                    }
+                }
+#else
+                std::sort(objects.begin()+start, objects.begin()+end,
+                          [axis, this](const hittable* lhs, const hittable* rhs)
+                            {return box_compare(lhs, rhs, axis);});
+#endif __CUDA_ARCH__
+            }
 
             auto mid = start + object_span/2;
             left_bvh = true;
@@ -124,4 +136,4 @@ class bvh_node : public hittable {
 };
 
 
-#endif
+#endif BVH_H

@@ -73,21 +73,6 @@ namespace utils {
         log_and_pause<lvl>(prompt, 0, location);
     }
 #ifdef __CUDACC__
-    template <typename T>
-    class CuArrayRAII: private NonCopyable<CuArrayRAII<T>> {
-        public:
-        explicit CuArrayRAII(const T* src, const size_t n=1):n(n) {
-            cudaMalloc(&cudaPtr, sizeof(T) * n);
-            if (src != nullptr) {
-                cudaMemcpy(cudaPtr, src, sizeof(T) * n, cudaMemcpyHostToDevice);
-            }
-        }
-        ~CuArrayRAII() {
-            cudaFree(cudaPtr);
-        }
-        T* cudaPtr{};
-        size_t n;
-    };
 
     /// helper function to check results of CUDA API calls, pause 1 sec and emit log if not cudaSuccess
     /// Usage: cu_ensure(cudaAPICall(...))
@@ -111,6 +96,21 @@ namespace utils {
     inline void cu_check(const std::source_location& location = std::source_location::current()) {
         cu_ensure(cudaGetLastError(), "cu_check: ", location);
     }
+    template <typename T>
+    class CuArrayRAII: private NonCopyable<CuArrayRAII<T>> {
+    public:
+        explicit CuArrayRAII(const T* src, const size_t n=1):n(n) {
+            cu_ensure(cudaMalloc(&cudaPtr, sizeof(T) * n));
+            if (src != nullptr) {
+                cu_ensure(cudaMemcpy(cudaPtr, src, sizeof(T) * n, cudaMemcpyHostToDevice));
+            }
+        }
+        ~CuArrayRAII() {
+            cudaFree(cudaPtr);
+        }
+        T* cudaPtr{};
+        size_t n;
+    };
 
     template <int number>
     consteval unsigned int integer_log2() {

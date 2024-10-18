@@ -101,7 +101,7 @@ hittable_list final_scene_build() {
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
-            boxes1.add(box3);
+            boxes1.add(static_cast<hittable *>(box3));
         }
     }
 
@@ -148,14 +148,14 @@ hittable_list final_scene_build() {
 }
 
 __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_record* image_rd) {
-    hittable_list boxes1{16};
+    hittable_list boxes1{64};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
-    hittable_list world{4};
+    hittable_list world{5};
 
-    int boxes_per_side = 4;
+    int boxes_per_side = 8;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 400.0;
+            auto w = 200.0;
             auto x0 = -1000.0 + i*w;
             auto z0 = -1000.0 + j*w;
             auto y0 = 0.0;
@@ -165,7 +165,7 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
             auto z1 = z0 + w;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
-            boxes1.add(box3);
+            boxes1.add(static_cast<hittable *>(box3));
         }
     }
 
@@ -183,7 +183,25 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     auto dielectric_sphere = new dielectric(1.5);
     auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
     world.add(dielectric_sphere_1);
-    return world;
+
+    int ns = 10;
+    auto boxes2 = new hittable_list{ns};
+    auto white = new lambertian(color(.73, .73, .73));
+    for (int j = 0; j < ns; j++) {
+        auto boxes2_sphere = new sphere(random_in_cube(0, 165, rnd), 10, white);
+        boxes2->add(boxes2_sphere);
+    }
+
+    // FIXME: bvh_node(hittable_list) will cause stack overflow in CUDA
+    auto bvh_node_box = new bvh_node(*boxes2);
+    auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
+    auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
+
+    world.add(bvh_node_box_translate);
+
+    hittable_list tree{1};
+    tree.add(new bvh_node{world});
+    return tree;
 }
 
 __global__ void debug_scene_build_cuda(hittable_list** world_ptr, curandState* states, image_record* image_rd) {
@@ -191,7 +209,6 @@ __global__ void debug_scene_build_cuda(hittable_list** world_ptr, curandState* s
     if (tid==0) {
         *world_ptr = new hittable_list{1};
         **world_ptr = debug_scene_build(states,image_rd);
-        //printf("%i", (*world_ptr)->capacity);
     }
 }
 
@@ -253,11 +270,8 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** sce
     std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
-            //cam.render_parallel(scene, image);
             camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
-            cudaDeviceSynchronize();
             cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
-
             utils::cu_check();
             mainRendererComm.frame_rendered.release();
         }
@@ -363,22 +377,21 @@ int main(int argc, char* argv[]) {
     initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
     utils::CuArrayRAII<hittable_list*> sceneGpuPtr{nullptr};
 
-    debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
-    cudaDeviceSynchronize();
-    utils::cu_check();
-    cudaDeviceSynchronize();
-    utils::cu_check();
     auto cam = final_camera(400, 32, 4);
     utils::CuArrayRAII camGpuPtr{&cam};
     if (argc!=1) {
         auto scene = debug_scene_build(nullptr,&rec);
         render_scene(scene, cam);
     } else {
-        //auto scene = debug_scene_build(nullptr,&rec);
-        //render_scene_realtime(scene, cam);
+        // auto scene = debug_scene_build(nullptr,&rec);
+        // //auto scene = final_scene_build();
+        // render_scene_realtime(scene, cam);
+        debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
+        cudaDeviceSynchronize();
+        utils::cu_check();
         render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
     }
-    // we don't do the cleanup yet
-    cudaDeviceReset();
+    // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
+    //cudaDeviceReset();
     return 0;
 }
