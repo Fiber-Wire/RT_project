@@ -16,6 +16,7 @@ class bvh_node : public hittable {
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to
         // persist the resulting bounding volume hierarchy.
+        printf("build bvh with %i objs, depth %llu", list.count, depth);
     }
 
     __host__ __device__ bvh_node(std::span<hittable*> objects, size_t start, size_t end) {
@@ -30,9 +31,11 @@ class bvh_node : public hittable {
         // TODO: add bvh_node detection, or split scene and bvh altogether
         if (object_span == 1) {
             left = right = objects[start];
+            depth = 0;
         } else if (object_span == 2) {
             left = objects[start];
             right = objects[start+1];
+            depth = 0;
         } else {
             {
 #ifdef __CUDA_ARCH__
@@ -54,21 +57,18 @@ class bvh_node : public hittable {
             }
 
             auto mid = start + object_span/2;
-            left_bvh = true;
-            right_bvh = true;
+            child_bvh = true;
             left = new bvh_node{objects, start, mid};
             right = new bvh_node{objects, mid, end};
+            depth = std::max(static_cast<bvh_node*>(left)->depth, static_cast<bvh_node*>(right)->depth) + 1;
         }
     }
 
     __host__ __device__ ~bvh_node() override {
-        if (left_bvh) {
+        if (child_bvh) {
             delete left;
-            left_bvh = false;
-        }
-        if (right_bvh) {
             delete right;
-            right_bvh = false;
+            child_bvh = false;
         }
     }
 
@@ -81,37 +81,55 @@ class bvh_node : public hittable {
             bbox = other.bbox;
             left = other.left;
             right = other.right;
-            if (other.left_bvh) {
+            depth = other.depth;
+            if (other.child_bvh) {
                 left = new bvh_node{};
-                *(bvh_node*)(left) = *(bvh_node*)(other.left);
-                left_bvh = true;
-            }
-            if (other.right_bvh) {
+                *static_cast<bvh_node *>(left) = *static_cast<bvh_node *>(other.left);
                 right = new bvh_node{};
-                *(bvh_node*)(right) = *(bvh_node*)(other.right);
-                right_bvh = true;
+                *static_cast<bvh_node *>(right) = *static_cast<bvh_node *>(other.right);
+                child_bvh = true;
             }
         }
         return *this;
     }
 
-    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
-        if (!bbox.hit(r, ray_t))
-            return false;
-
-        bool hit_left = left->hit(r, ray_t, rec);
-        bool hit_right = right->hit(r, interval(ray_t.min, hit_left ? rec.t : ray_t.max), rec);
-
-        return hit_left || hit_right;
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
+        bvh_node const * bvh_stack[6];
+        int stack_index = 0;
+        bvh_stack[stack_index] = this;
+        bool is_hit = false;
+        auto max_t = ray_t.max;
+        while (stack_index > -1) {
+            const auto current_node = bvh_stack[stack_index];
+            stack_index--;
+            bool current_hit = current_node->bbox.hit(r, interval(ray_t.min, max_t));
+            if (current_hit) {
+                if (current_node->child_bvh) {
+                    stack_index+=1;
+                    bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->right);
+                    if (current_node->left != current_node->right) {
+                        stack_index+=1;
+                        bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->left);
+                    }
+                } else {
+                    bool hit_left = current_node->left->hit(r, interval(ray_t.min, max_t), rec);
+                    max_t = hit_left ? rec.t : max_t;
+                    bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
+                    max_t = hit_right ? rec.t : max_t;
+                    is_hit = is_hit || hit_left || hit_right;
+                }
+            }
+        }
+        return is_hit;
     }
 
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
+    size_t depth{};
     hittable* left{};
-    bool left_bvh{false};
     hittable* right{};
-    bool right_bvh{false};
+    bool child_bvh{false};
     aabb bbox;
 
     __host__ __device__ static bool box_compare(
@@ -120,18 +138,6 @@ class bvh_node : public hittable {
         auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
         auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
         return a_axis_interval.min < b_axis_interval.min;
-    }
-
-    __host__ __device__ static bool box_x_compare (const hittable* a, const hittable* b) {
-        return box_compare(a, b, 0);
-    }
-
-    __host__ __device__ static bool box_y_compare (const hittable* a, const hittable* b) {
-        return box_compare(a, b, 1);
-    }
-
-    __host__ __device__ static bool box_z_compare (const hittable* a, const hittable* b) {
-        return box_compare(a, b, 2);
     }
 };
 

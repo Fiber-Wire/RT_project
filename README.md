@@ -7,6 +7,7 @@ A primitive ray-tracer written in CUDA.
 - Forked from [Ray Tracing: The Next Week](https://raytracing.github.io/books/RayTracingTheNextWeek.html) 
 with minimal modifications to provide a baseline.
 - Working CUDA implementation with recursive function call
+- Loop-based BVH traversal
 
 ![reference.png](reference.png)
 
@@ -15,7 +16,7 @@ with minimal modifications to provide a baseline.
 Debug scene, 400x400 px, 32 samples per pixel, depth of ray is 4.
 
 - AMD Ryzen 9 7940HS 8c16t: \~201.1 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~44.7 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~29.5 ms.
 
 Final scene, 400x400 px, 32 samples per pixel, depth of ray is 4.
 

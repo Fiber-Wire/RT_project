@@ -33,7 +33,7 @@ class hittable {
   public:
     __host__ __device__ virtual ~hittable() {}
 
-    __host__ __device__ virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
+    __host__ __device__ virtual bool hit(const ray& r, const interval ray_t, hit_record& rec) const = 0;
 
     __host__ __device__ virtual aabb bounding_box() const = 0;
 };
@@ -47,7 +47,7 @@ class translate : public hittable {
         bbox = object->bounding_box() + offset;
     }
 
-    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         // Move the ray backwards by the offset
         ray offset_r(r.origin() - offset, r.direction());
 
@@ -104,7 +104,7 @@ class rotate_y : public hittable {
         bbox = aabb(min, max);
     }
 
-    __host__ __device__ bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
 
         // Transform the ray from world space to object space.
 

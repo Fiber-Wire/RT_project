@@ -14,6 +14,7 @@
 #include "texture.cuh"
 #include "curand.h"
 #include "curand_kernel.h"
+#include "pseudo_rnd.hpp"
 #define BLOCKDIM_X 32
 #define GRIDDIM_X 1024
 struct MainRendererComm{
@@ -155,14 +156,18 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     int boxes_per_side = 8;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 200.0;
-            auto x0 = -1000.0 + i*w;
-            auto z0 = -1000.0 + j*w;
-            auto y0 = 0.0;
-            auto x1 = x0 + w;
+            auto w = 200.0f;
+            auto x0 = -1000.0f + i*w;
+            auto z0 = -1000.0f + j*w;
+            auto y0 = 0.0f;
+            auto x1 = x0 + w-0.1f;
+            // Get near-identical scene between CPU and CUDA
+            #ifdef __CUDA_ARCH__
             auto y1 = random_float(1,101, rnd);
-
-            auto z1 = z0 + w;
+            #else
+            auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
+            #endif
+            auto z1 = z0 + w-0.1f;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
             boxes1.add(static_cast<hittable *>(box3));
@@ -374,7 +379,8 @@ int main(int argc, char* argv[]) {
     utils::CuArrayRAII image_rd{&rec_cuda};
 
     utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
-    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
+    // Cherry-picked seed
+    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 5);
     utils::CuArrayRAII<hittable_list*> sceneGpuPtr{nullptr};
 
     auto cam = final_camera(400, 32, 4);
