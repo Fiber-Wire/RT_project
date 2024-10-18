@@ -232,16 +232,17 @@ __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::
     if (tid==0) {
         cam->initialize();
     }
-    __syncthreads();
+    auto devState = devStates[tid];
     auto gridSize = blockDim.x * gridDim.x;
     auto width = cam->image_width;
     auto scene = *scenepptr;
     for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
-        auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devStates[tid], tid%threadPerPixel);
+        auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devState, tid%threadPerPixel);
         if (tid%threadPerPixel == 0) {
             image[pixelId] = pixel_result;
         }
     }
+    devStates[tid] = devState;
 }
 
 void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
@@ -277,6 +278,8 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
         render_finished.set_value_at_thread_exit();
     }}.detach();
     mainRendererComm.frame_start_render.release();
+    size_t frames = 0;
+    std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl())
     {
@@ -286,11 +289,15 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
             SDL_RenderPresent(renderer.get());
             auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            frames += 1;
+            frame_times += frame_time;
             utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
         }
     }
+    utils::log("Total frames: "+std::to_string(frames)+
+               ", avg. frame time: "+std::to_string(frame_times.count()/frames/1e3)+" ms.");
     notify_renderer_exit();
     while(render_finished_future.wait_for(std::chrono::milliseconds{5})==std::future_status::timeout) {
         want_exit_sdl();
@@ -311,6 +318,8 @@ void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_
         render_finished.set_value_at_thread_exit();
     }}.detach();
     mainRendererComm.frame_start_render.release();
+    size_t frames = 0;
+    std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl())
     {
@@ -320,11 +329,15 @@ void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
             SDL_RenderPresent(renderer.get());
             auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            frames += 1;
+            frame_times += frame_time;
             utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
         }
     }
+    utils::log("Total frames: "+std::to_string(frames)+
+           ", avg. frame time: "+std::to_string(frame_times.count()/frames/1e3)+" ms.");
     notify_renderer_exit();
     while(render_finished_future.wait_for(std::chrono::milliseconds{5})==std::future_status::timeout) {
         want_exit_sdl();
@@ -361,6 +374,7 @@ int main(int argc, char* argv[]) {
         auto scene = debug_scene_build(nullptr,&rec);
         render_scene(scene, cam);
     } else {
+        //auto scene = debug_scene_build(nullptr,&rec);
         //render_scene_realtime(scene, cam);
         render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
     }

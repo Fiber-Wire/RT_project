@@ -10,6 +10,13 @@ with minimal modifications to provide a baseline.
 
 ![reference.png](reference.png)
 
+### Frame time
+
+Debug scene, 400x400 px, 32 samples per pixel, depth of ray is 4.
+
+- AMD Ryzen 9 7940HS 8c16t: ~113 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: ~15.2 ms.
+
 ## How-to
 
 ### Debug
