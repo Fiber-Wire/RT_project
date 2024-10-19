@@ -6,7 +6,13 @@
 #include "hittable_list.cuh"
 
 #include <algorithm>
+class bvh_node;
 
+struct bvh_node_construct_info {
+    bvh_node* node;
+    size_t start;
+    size_t end;
+};
 
 class bvh_node : public hittable {
   public:
@@ -19,49 +25,61 @@ class bvh_node : public hittable {
         printf("build bvh with %i objs, depth %llu\n", list.count, depth);
     }
 
-    __host__ __device__ bvh_node(std::span<hittable*> objects, size_t start, size_t end) {
-        // Build the bounding box of the span of source objects.
-        bbox = aabb::empty();
-        for (size_t object_index=start; object_index < end; object_index++)
-            bbox = aabb(bbox, objects[object_index]->bounding_box());
+    __host__ __device__ bvh_node(std::span<hittable*> objects, const size_t start, const size_t end) {
+        auto bvh_node_list = new bvh_node[glm::pow(2,glm::log2(end-start)+1)];
+        bvh_node_construct_info info_stack[10];
+        int stack_index = 0;
+        info_stack[stack_index] = {this, start, end};
+        while(stack_index>-1) {
+            auto [node, start_t, end_t] = info_stack[stack_index];
+            stack_index--;
+            node->bbox = aabb::empty();
+            for (size_t object_index=start_t; object_index < end_t; object_index++)
+                node->bbox = aabb(node->bbox, objects[object_index]->bounding_box());
 
-        int axis = bbox.longest_axis();
+            int axis = node->bbox.longest_axis();
+            size_t object_span = end_t - start_t;
 
-        size_t object_span = end - start;
-        // TODO: add bvh_node detection, or split scene and bvh altogether
-        if (object_span == 1) {
-            left = right = objects[start];
-            depth = 0;
-        } else if (object_span == 2) {
-            left = objects[start];
-            right = objects[start+1];
-            depth = 0;
-        } else {
-            {
+            // TODO: add bvh_node detection, or split scene and bvh altogether
+            if (object_span == 1) {
+                node->left = node->right = objects[start_t];
+                node->depth = 0;
+            } else if (object_span == 2) {
+                node->left = objects[start_t];
+                node->right = objects[start_t+1];
+                node->depth = 0;
+            } else {
+                {
 #ifdef __CUDA_ARCH__
-                // TODO: use a more efficient sorting method
-                for (size_t comp_index=start; comp_index < end-1; comp_index++) {
-                    for (size_t object_index=comp_index+1; object_index < end; object_index++) {
-                        if (!box_compare(objects[comp_index], objects[object_index], axis)) {
-                            const auto temp = objects[comp_index];
-                            objects[comp_index] = objects[object_index];
-                            objects[object_index] = temp;
+                    // TODO: use a more efficient sorting method
+                    for (size_t comp_index=start_t; comp_index < end_t-1; comp_index++) {
+                        for (size_t object_index=comp_index+1; object_index < end_t; object_index++) {
+                            if (!box_compare(objects[comp_index], objects[object_index], axis)) {
+                                const auto temp = objects[comp_index];
+                                objects[comp_index] = objects[object_index];
+                                objects[object_index] = temp;
+                            }
                         }
                     }
-                }
 #else
-                std::sort(objects.begin()+start, objects.begin()+end,
-                          [axis, this](const hittable* lhs, const hittable* rhs)
-                            {return box_compare(lhs, rhs, axis);});
+                    std::sort(objects.begin()+start_t, objects.begin()+end_t,
+                              [axis, this](const hittable* lhs, const hittable* rhs)
+                                {return box_compare(lhs, rhs, axis);});
 #endif
+                }
+                auto mid = start_t + object_span/2;
+                node->child_bvh = true;
+                node->right = bvh_node_list + 1;
+                node->left = bvh_node_list;
+                info_stack[stack_index + 2] = {bvh_node_list, start_t, mid};//left
+                info_stack[stack_index + 1] = {bvh_node_list + 1, mid, end_t};//right
+                int temp_depth = glm::log2(object_span);
+                node->depth = glm::pow(2,temp_depth)==object_span? temp_depth-1:temp_depth;
+                bvh_node_list += 2;
+                stack_index += 2;
             }
-
-            auto mid = start + object_span/2;
-            child_bvh = true;
-            left = new bvh_node{objects, start, mid};
-            right = new bvh_node{objects, mid, end};
-            depth = std::max(static_cast<bvh_node*>(left)->depth, static_cast<bvh_node*>(right)->depth) + 1;
         }
+        // Build the bounding box of the span of source objects.
     }
 
     __host__ __device__ ~bvh_node() override {
@@ -94,7 +112,7 @@ class bvh_node : public hittable {
     }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
-        bvh_node const * bvh_stack[6];
+        bvh_node const * bvh_stack[10];
         int stack_index = 0;
         bvh_stack[stack_index] = this;
         bool is_hit = false;

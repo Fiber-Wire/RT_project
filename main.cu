@@ -149,11 +149,11 @@ hittable_list final_scene_build() {
 }
 
 __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_record* image_rd) {
-    hittable_list boxes1{64};
+    hittable_list boxes1{400};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
     hittable_list world{5};
 
-    int boxes_per_side = 8;
+    int boxes_per_side = 20;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
             auto w = 200.0f;
