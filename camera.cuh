@@ -117,15 +117,15 @@ class camera {
         v = cross(w, u);
 
         // Calculate the vectors across the horizontal and down the vertical viewport edges.
-        vec3 viewport_u = viewport_width * u;    // Vector across viewport horizontal edge
-        vec3 viewport_v = viewport_height * -v;  // Vector down viewport vertical edge
+        const vec3 viewport_u = viewport_width * u;    // Vector across viewport horizontal edge
+        const vec3 viewport_v = viewport_height * -v;  // Vector down viewport vertical edge
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
         pixel_delta_u = viewport_u / static_cast<float>(image_width);
         pixel_delta_v = viewport_v / static_cast<float>(image_height);
 
         // Calculate the location of the upper left pixel.
-        auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2.0f - viewport_v/2.0f;
+        const auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2.0f - viewport_v/2.0f;
         pixel00_loc = viewport_upper_left + 0.5f * (pixel_delta_u + pixel_delta_v);
 
     }
@@ -146,13 +146,13 @@ class camera {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
-        auto offset = sample_square(rnd);
-        auto pixel_sample = pixel00_loc
-                          + ((col_id + offset.x) * pixel_delta_u)
-                          + ((row_id + offset.y) * pixel_delta_v);
+        const auto offset = sample_square(rnd);
+        const auto pixel_sample = pixel00_loc
+                                  + ((col_id + offset.x) * pixel_delta_u)
+                                  + ((row_id + offset.y) * pixel_delta_v);
 
-        auto ray_origin = center;
-        auto ray_direction = pixel_sample - ray_origin;
+        const auto ray_origin = center;
+        const auto ray_direction = pixel_sample - ray_origin;
 
         return ray(ray_origin, ray_direction);
     }
@@ -164,7 +164,7 @@ class camera {
 
     __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world, curandState* rnd) const {
         ray cur_ray = r;
-        vec3 cur_attenuation = vec3(1.0f,1.0f,1.0f);
+        auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
         for(int i = 0; i < depth; i++) {
             hit_record rec;
 
@@ -178,7 +178,8 @@ class camera {
             if (rec.mat->will_scatter) {
                 rec.mat->scatter(cur_ray, rec, attenuation, scattered, rnd);
             } else {
-                color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
+                const auto recp = cur_ray.at(rec.t);
+                color color_from_emission = rec.mat->emitted(rec.u, rec.v, recp);
                 return cur_attenuation * color_from_emission;
             }
 

@@ -3,7 +3,7 @@
 
 #include "hittable.cuh"
 #include "texture.cuh"
-#include "vec3.cuh"
+#include "vec.cuh"
 
 
 class material {
@@ -51,13 +51,13 @@ class lambertian final : public material {
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
         auto scatter_direction = rec.normal + random_unit_vector(rnd);
-
+        const auto recp = r_in.at(rec.t);
         // Catch degenerate scatter direction
         if (near_zero(scatter_direction))
             scatter_direction = rec.normal;
 
-        scattered = ray(rec.p, scatter_direction);
-        attenuation = tex->value(rec.u, rec.v, rec.p);
+        scattered = ray(recp, scatter_direction);
+        attenuation = tex->value(rec.u, rec.v, recp);
     }
 
   private:
@@ -74,11 +74,12 @@ class metal final : public material {
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
+        const auto recp = r_in.at(rec.t);
         vec3 reflected = reflect(r_in.direction(), rec.normal);
         do {
             reflected = unit_vector(reflected) + (fuzz * random_unit_vector(rnd));
         } while (dot(reflected, rec.normal) <= 0);
-        scattered = ray(rec.p, reflected);
+        scattered = ray(recp, reflected);
         attenuation = albedo;
     }
 
@@ -96,6 +97,7 @@ class dielectric final : public material {
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
+        const auto recp = r_in.at(rec.t);
         attenuation = color(1.0f, 1.0f, 1.0f);
         const float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
 
@@ -111,7 +113,7 @@ class dielectric final : public material {
         else
             direction = refract(unit_direction, rec.normal, ri);
 
-        scattered = ray(rec.p, direction);
+        scattered = ray(recp, direction);
     }
 
   private:
@@ -173,8 +175,9 @@ class isotropic final : public material {
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
-        scattered = ray(rec.p, random_unit_vector(rnd));
-        attenuation = tex->value(rec.u, rec.v, rec.p);
+        const auto recp = r_in.at(rec.t);
+        scattered = ray(recp, random_unit_vector(rnd));
+        attenuation = tex->value(rec.u, rec.v, recp);
     }
 
     __host__ __device__ isotropic(const isotropic& other) {

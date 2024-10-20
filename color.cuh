@@ -2,7 +2,7 @@
 #define COLOR_H
 
 #include "interval.cuh"
-#include "vec3.cuh"
+#include "vec.cuh"
 
 using color = vec3;
 

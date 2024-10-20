@@ -2,7 +2,7 @@
 #define HITTABLE_H
 
 #include "aabb.cuh"
-#include "vec3.cuh"
+#include "vec.cuh"
 #include "ray.cuh"
 
 
@@ -11,12 +11,13 @@ class material;
 
 class hit_record {
   public:
-    point3 p;
-    vec3 normal;
     material* mat;
-    float t;
     float u;
     float v;
+
+    vec3 normal;
+
+    float t;
     bool front_face;
 
     __host__ __device__ void set_face_normal(const ray& r, const vec3& outward_normal) {
@@ -55,8 +56,8 @@ class translate final : public hittable {
         if (!object->hit(offset_r, ray_t, rec))
             return false;
 
-        // Move the intersection point forwards by the offset
-        rec.p += offset;
+        // No need to move the intersection point forwards by the offset,
+        // since the hit-point can be inferred by ray.at(rec.t)
 
         return true;
     }
@@ -128,12 +129,7 @@ class rotate_y final : public hittable {
             return false;
 
         // Transform the intersection from object space back to world space.
-
-        rec.p = point3(
-            (cos_theta * rec.p.x) + (sin_theta * rec.p.z),
-            rec.p.y,
-            (-sin_theta * rec.p.x) + (cos_theta * rec.p.z)
-        );
+        // No need to worry about hit-point
 
         rec.normal = vec3(
             (cos_theta * rec.normal.x) + (sin_theta * rec.normal.z),

@@ -56,5 +56,39 @@ __host__ __device__ inline vec3 refract(const vec3& uv, const vec3& n, const flo
     return r_out_perp + r_out_parallel;
 }
 
+class NormVec3 {
+public:
+    __host__ __device__ NormVec3() {}
+    __host__ __device__ explicit NormVec3(const vec3 n) {
+        glm::vec2 p={n.x, n.y};
+        p /= abs(n.x) + abs(n.y) + abs(n.z);
+        p = n.z >= 0.0f ? p : OctWrap(p);
+        p = p * 0.5f + 0.5f;
+        vec_ = p;
+    }
+    __host__ __device__ operator vec3 () const {
+        glm::vec3 tmp = {vec_.x, vec_.y, 1.0f - abs(vec_.x) - abs(vec_.y)};
+
+        // https://twitter.com/Stubbesaurus/status/937994790553227264
+        const float t = max(-tmp.z, 0.0f);
+        tmp.x += tmp.x >= 0.0f ? -t : t;
+        tmp.y += tmp.y >= 0.0f ? -t : t;
+
+        return normalize(tmp);
+    }
+    __host__ __device__ NormVec3 operator=(const vec3 &n) {
+        return *this = NormVec3(n);
+    }
+private:
+    glm::vec2 vec_{};
+
+    __host__ __device__ static glm::vec2 OctWrap(const glm::vec2 v) {
+        glm::vec2 p;
+        p.x = (1.0f-abs(v.y))*(v.x >= 0.0f ? 1.0f : -1.0f);
+        p.y = (1.0f-abs(v.x))*(v.y >= 0.0f ? 1.0f : -1.0f);
+        return p;
+    }
+};
+
 
 #endif

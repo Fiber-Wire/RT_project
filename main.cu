@@ -4,6 +4,7 @@
 #include <thread>
 #include "sdl_wrapper.hpp"
 #include "helpers.cuh"
+#include "vec.cuh"
 
 #include "bvh.cuh"
 #include "camera.cuh"

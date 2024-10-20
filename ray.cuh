@@ -1,7 +1,7 @@
 #ifndef RAY_H
 #define RAY_H
 
-#include "vec3.cuh"
+#include "vec.cuh"
 
 
 class ray {

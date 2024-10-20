@@ -40,8 +40,7 @@ class sphere final : public hittable {
         }
 
         rec.t = root;
-        rec.p = r.at(rec.t);
-        const vec3 outward_normal = (rec.p - current_center) / radius;
+        const vec3 outward_normal = (r.at(rec.t) - current_center) / radius;
         rec.set_face_normal(r, outward_normal);
         get_sphere_uv(outward_normal, rec.u, rec.v);
         rec.mat = mat;
@@ -102,7 +101,7 @@ class quad final : public hittable {
             return false;
 
         // Return false if the hit point parameter t is outside the ray interval.
-        auto t = (D - dot(normal, r.origin())) / denom;
+        const auto t = (D - dot(normal, r.origin())) / denom;
         if (!ray_t.contains(t))
             return false;
 
@@ -117,7 +116,6 @@ class quad final : public hittable {
 
         // Ray hits the 2D shape; set the rest of the hit record and return true.
         rec.t = t;
-        rec.p = intersection;
         rec.mat = mat;
         rec.set_face_normal(r, normal);
 

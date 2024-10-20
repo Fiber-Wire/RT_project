@@ -20,7 +20,7 @@ set ( SOURCE_RT_PROJECT
         interval.cuh
         image_loader.cuh
         helpers.cuh
-        vec3.cuh
+        vec.cuh
         ray.cuh
 )
 find_package(SDL2 CONFIG REQUIRED)
