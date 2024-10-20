@@ -15,8 +15,8 @@ Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 8.
 
 Controlled test scene (same as the reference render above), 400x400 px, 32 samples per pixel, depth of ray is 4.
 
-- AMD Ryzen 9 7940HS 8c16t: \~459.2 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~119.5 ms.
+- AMD Ryzen 9 7940HS 8c16t: \~412.5 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~102.2 ms.
 
 ## How-to
 
