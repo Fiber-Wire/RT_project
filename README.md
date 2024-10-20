@@ -31,10 +31,14 @@ Use `CMake` and `vcpkg`.
 ### Run
 Run with any arguments for `.ppm` output:
 ```shell
-RT_project.exe XXX > render.ppm
+RT_project.exe --device default > render.ppm
 ```
 
-Run directly for real-time display output:
+Run with default arguments for real-time display output:
 ```shell
 RT_project.exe
+```
+Run with arguments for real-time display output:
+```shell
+RT_project.exe --size <int> --depth <int> --samples <int> --device <string> --frame <int>
 ```

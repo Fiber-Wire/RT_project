@@ -250,7 +250,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
     cudaFree(imageGpuPtr);
 }
 
-void render_scene_realtime(hittable_list &scene, camera &cam) {
+void render_scene_realtime(hittable_list &scene, camera &cam, const int &max_frame) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -266,7 +266,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     size_t frames = 0;
     std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl())
+    while (!want_exit_sdl() && frames < max_frame)
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -290,7 +290,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
-void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
+void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates, const int& max_frame) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -306,7 +306,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
     size_t frames = 0;
     std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl())
+    while (!want_exit_sdl() && frames < max_frame)
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -335,9 +335,32 @@ __global__ void initCurand(curandState *state, unsigned long seed){
     curand_init(seed, idx, 0, &state[idx]);
 }
 
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, std::string& device, int& frame) {
+    for (int i = 1; i < argc; i += 2) {
+        if (std::string(argv[i]) == "--size") {
+            size = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--samples") {
+            samples = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--depth") {
+            depth = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--device") {
+            device = argv[i + 1];
+        }else if (std::string(argv[i]) == "--frame") {
+            frame = std::atoi(argv[i + 1]);
+        } else {
+            std::cerr << "Usage: " << argv[0]
+                  << " --size <int> --depth <int> --samples <int> --device <string>" << std::endl;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
+
+    int size = 400, samples = 32, depth = 4, frame = 20;
+    std::string device = "gpu";
+    parse_arguments(argc, argv, size, samples, depth, device, frame);
 
     auto image_ld = image_loader("earthmap.jpg");
     auto rec_cuda = image_ld.get_record_cuda();
@@ -349,20 +372,20 @@ int main(int argc, char* argv[]) {
     initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
     const utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
 
-    auto cam = final_camera(400, 32, 4);
+    auto cam = final_camera(size, samples, depth);
     const utils::CuArrayRAII camGpuPtr{&cam};
-    if (argc!=1) {
+    if (device == "default") {
         const auto scene = final_scene_build(nullptr,&rec);
         render_scene(scene, cam);
     } else {
-        if (false) {
+        if (device == "cpu") {
             auto scene = final_scene_build(nullptr,&rec);
-            render_scene_realtime(scene, cam);
+            render_scene_realtime(scene, cam, frame);
         } else {
             final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
             cudaDeviceSynchronize();
             utils::cu_check();
-            render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
+            render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame);
         }
     }
     // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
