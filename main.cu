@@ -85,7 +85,7 @@ void cornell_box() {
 }
 
 __host__ __device__ hittable_list final_scene_build(curandState* rnd, const image_record* image_rd) {
-    hittable_list world{7};
+    hittable_list world{8};
 
     // 1st item
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
@@ -148,6 +148,11 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
     auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
     auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
     world.add(bvh_node_box_translate);
+
+    //8th
+    auto metal_2 = new metal(color(212.0f/256, 175.0f/256, 55.0f/256), 0.025);
+    auto metal_sphere_2 = new sphere(point3(240, 320, 400), 60, metal_2);
+    world.add(metal_sphere_2);
 
     hittable_list tree{1};
     tree.add(new bvh_node{world});

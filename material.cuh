@@ -17,9 +17,8 @@ class material {
     __host__ __device__ virtual void scatter(
         const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd
     ) const {}
-    __host__ __device__ virtual bool will_scatter() const {
-        return false;
-    }
+
+    bool will_scatter = false;
 };
 
 
@@ -28,8 +27,11 @@ class lambertian final : public material {
     __host__ __device__ explicit lambertian(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
+        will_scatter = true;
     }
-    __host__ __device__ explicit lambertian(texture* tex) : tex(tex) {}
+    __host__ __device__ explicit lambertian(texture* tex) : tex(tex) {
+        will_scatter = true;
+    }
 
     __host__ __device__ lambertian(const lambertian& other) {
         *this = other;
@@ -57,9 +59,7 @@ class lambertian final : public material {
         scattered = ray(rec.p, scatter_direction);
         attenuation = tex->value(rec.u, rec.v, rec.p);
     }
-    __host__ __device__ bool will_scatter() const override {
-        return true;
-    }
+
   private:
     texture* tex;
     solid_color color_tex{{0.5f,0.0f,0.5f}};
@@ -68,7 +68,9 @@ class lambertian final : public material {
 
 class metal final : public material {
   public:
-    __host__ __device__ metal(const color& albedo, const float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
+    __host__ __device__ metal(const color& albedo, const float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {
+        will_scatter = true;
+    }
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
@@ -79,9 +81,7 @@ class metal final : public material {
         scattered = ray(rec.p, reflected);
         attenuation = albedo;
     }
-    __host__ __device__ bool will_scatter() const override {
-        return true;
-    }
+
   private:
     color albedo;
     float fuzz;
@@ -90,7 +90,9 @@ class metal final : public material {
 
 class dielectric final : public material {
   public:
-    __host__ __device__ explicit dielectric(const float refraction_index) : refraction_index(refraction_index) {}
+    __host__ __device__ explicit dielectric(const float refraction_index) : refraction_index(refraction_index) {
+        will_scatter = true;
+    }
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
@@ -110,9 +112,6 @@ class dielectric final : public material {
             direction = refract(unit_direction, rec.normal, ri);
 
         scattered = ray(rec.p, direction);
-    }
-    __host__ __device__ bool will_scatter() const override {
-        return true;
     }
 
   private:
@@ -166,17 +165,16 @@ class isotropic final : public material {
     __host__ __device__ explicit isotropic(const color& albedo) {
         color_tex = solid_color(albedo);
         tex = &color_tex;
+        will_scatter = true;
     }
-    __host__ __device__ explicit isotropic(texture* tex) : tex(tex) {}
+    __host__ __device__ explicit isotropic(texture* tex) : tex(tex) {
+        will_scatter = true;
+    }
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
         scattered = ray(rec.p, random_unit_vector(rnd));
         attenuation = tex->value(rec.u, rec.v, rec.p);
-    }
-
-    __host__ __device__ bool will_scatter() const override {
-        return true;
     }
 
     __host__ __device__ isotropic(const isotropic& other) {
