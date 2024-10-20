@@ -6,9 +6,9 @@ A primitive ray-tracer written in CUDA.
 
 - Forked from [Ray Tracing: The Next Week](https://raytracing.github.io/books/RayTracingTheNextWeek.html) 
 with minimal modifications to provide a baseline.
-- Working CUDA implementation with recursive function call
-- Loop-based BVH traversal
+- Working CUDA implementation with loop-based function calls
 
+Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 4.
 ![reference.png](reference.png)
 
 ### Frame time
