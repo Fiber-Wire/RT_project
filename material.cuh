@@ -23,7 +23,7 @@ class material {
 };
 
 
-class lambertian : public material {
+class lambertian final : public material {
   public:
     __host__ __device__ explicit lambertian(const color& albedo) {
         color_tex = solid_color(albedo);
@@ -66,9 +66,9 @@ class lambertian : public material {
 };
 
 
-class metal : public material {
+class metal final : public material {
   public:
-    __host__ __device__ metal(const color& albedo, float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
+    __host__ __device__ metal(const color& albedo, const float fuzz) : albedo(albedo), fuzz(fuzz < 1 ? fuzz : 1) {}
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
@@ -88,20 +88,20 @@ class metal : public material {
 };
 
 
-class dielectric : public material {
+class dielectric final : public material {
   public:
-    __host__ __device__ explicit dielectric(float refraction_index) : refraction_index(refraction_index) {}
+    __host__ __device__ explicit dielectric(const float refraction_index) : refraction_index(refraction_index) {}
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
         attenuation = color(1.0f, 1.0f, 1.0f);
-        float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
+        const float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
 
-        vec3 unit_direction = unit_vector(r_in.direction());
-        float cos_theta = min(dot(-unit_direction, rec.normal), 1.0f);
-        float sin_theta = std::sqrt(1.0f - cos_theta*cos_theta);
+        const vec3 unit_direction = unit_vector(r_in.direction());
+        const float cos_theta = min(dot(-unit_direction, rec.normal), 1.0f);
+        const float sin_theta = std::sqrt(1.0f - cos_theta*cos_theta);
 
-        bool cannot_refract = ri * sin_theta > 1.0f;
+        const bool cannot_refract = ri * sin_theta > 1.0f;
         vec3 direction;
 
         if (cannot_refract || reflectance(cos_theta, ri) > random_float(rnd))
@@ -120,7 +120,7 @@ class dielectric : public material {
     // the refractive index of the enclosing media
     float refraction_index;
 
-    __host__ __device__ static float reflectance(float cosine, float refraction_index) {
+    __host__ __device__ static float reflectance(const float cosine, const float refraction_index) {
         // Use Schlick's approximation for reflectance.
         auto r0 = (1.0f - refraction_index) / (1.0f + refraction_index);
         r0 = r0*r0;
@@ -129,7 +129,7 @@ class dielectric : public material {
 };
 
 
-class diffuse_light : public material {
+class diffuse_light final : public material {
   public:
     __host__ __device__ explicit diffuse_light(texture* tex) : tex(tex) {}
     __host__ __device__ explicit diffuse_light(const color& emit) {
@@ -137,7 +137,7 @@ class diffuse_light : public material {
         tex = &color_tex;
     }
 
-    __host__ __device__ color emitted(float u, float v, const point3& p) const override {
+    __host__ __device__ color emitted(const float u, const float v, const point3& p) const override {
         return tex->value(u, v, p);
     }
     __host__ __device__ diffuse_light(const diffuse_light& other) {
@@ -161,7 +161,7 @@ class diffuse_light : public material {
 };
 
 
-class isotropic : public material {
+class isotropic final : public material {
   public:
     __host__ __device__ explicit isotropic(const color& albedo) {
         color_tex = solid_color(albedo);

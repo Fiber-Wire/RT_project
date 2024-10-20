@@ -42,7 +42,7 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const hittable* world, int row_id, int col_id, curandState *rnd) {
+    __host__ __device__ unsigned int render_pixel(const hittable* world, int row_id, int col_id, curandState *rnd) const {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(col_id, row_id, rnd);
@@ -98,7 +98,7 @@ class camera {
         }
     }
     __host__ __device__ void initialize() {
-        image_height = int(image_width / aspect_ratio);
+        image_height = static_cast<int>(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
 
         pixel_samples_scale = 1.0 / samples_per_pixel;
@@ -106,10 +106,10 @@ class camera {
         center = lookfrom;
 
         // Determine viewport dimensions.
-        auto theta = degrees_to_radians(vfov);
-        auto h = std::tan(theta/2);
-        auto viewport_height = 2 * h * focus_dist;
-        auto viewport_width = viewport_height * (float(image_width)/image_height);
+        const auto theta = degrees_to_radians(vfov);
+        const auto h = std::tan(theta/2);
+        const auto viewport_height = 2 * h * focus_dist;
+        const auto viewport_width = viewport_height * (static_cast<float>(image_width)/image_height);
 
         // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
         w = unit_vector(lookfrom - lookat);
@@ -121,8 +121,8 @@ class camera {
         vec3 viewport_v = viewport_height * -v;  // Vector down viewport vertical edge
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-        pixel_delta_u = viewport_u / (float)image_width;
-        pixel_delta_v = viewport_v / (float)image_height;
+        pixel_delta_u = viewport_u / static_cast<float>(image_width);
+        pixel_delta_v = viewport_v / static_cast<float>(image_height);
 
         // Calculate the location of the upper left pixel.
         auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2.0f - viewport_v/2.0f;
@@ -157,7 +157,7 @@ class camera {
         return ray(ray_origin, ray_direction);
     }
 
-    __host__ __device__ vec3 sample_square(curandState* rnd) const {
+    __host__ __device__ static vec3 sample_square(curandState* rnd) {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }

@@ -13,11 +13,11 @@ class texture {
 };
 
 
-class solid_color : public texture {
+class solid_color final : public texture {
   public:
-    __host__ __device__ solid_color(const color& albedo) : albedo(albedo) {}
+    __host__ __device__ explicit solid_color(const color& albedo) : albedo(albedo) {}
 
-    __host__ __device__ solid_color(float red, float green, float blue) : solid_color(color(red,green,blue)) {}
+    __host__ __device__ explicit solid_color(const float red, const float green, const float blue) : solid_color(color(red,green,blue)) {}
 
     __host__ __device__ color value(float u, float v, const point3& p) const override {
         return albedo;
@@ -28,12 +28,12 @@ class solid_color : public texture {
 };
 
 
-class checker_texture : public texture {
+class checker_texture final : public texture {
   public:
-    __host__ __device__ checker_texture(float scale, texture* even, texture* odd)
+    __host__ __device__ checker_texture(const float scale, texture* even, texture* odd)
       : inv_scale(1.0f / scale), even(even), odd(odd) {}
 
-    __host__ __device__ checker_texture(float scale, const color& c1, const color& c2)
+    __host__ __device__ checker_texture(const float scale, const color& c1, const color& c2)
       : inv_scale(1.0f / scale) {
       color_even = solid_color(c1);
       color_odd = solid_color(c2);
@@ -41,12 +41,12 @@ class checker_texture : public texture {
       odd = &color_odd;
     }
 
-    __host__ __device__ color value(float u, float v, const point3& p) const override {
-        auto xInteger = int(std::floor(inv_scale * p.x));
-        auto yInteger = int(std::floor(inv_scale * p.y));
-        auto zInteger = int(std::floor(inv_scale * p.z));
+    __host__ __device__ color value(const float u, const float v, const point3& p) const override {
+        const auto xInteger = static_cast<int>(std::floor(inv_scale * p.x));
+        const auto yInteger = static_cast<int>(std::floor(inv_scale * p.y));
+        const auto zInteger = static_cast<int>(std::floor(inv_scale * p.z));
 
-        bool isEven = (xInteger + yInteger + zInteger) % 2 == 0;
+        const bool isEven = (xInteger + yInteger + zInteger) % 2 == 0;
 
         return isEven ? even->value(u, v, p) : odd->value(u, v, p);
     }
@@ -60,7 +60,7 @@ class checker_texture : public texture {
 };
 
 
-class image_texture : public texture {
+class image_texture final : public texture {
   public:
     __host__ __device__ explicit image_texture(const image_record &image_rd):image_rd(image_rd) {}
 
@@ -72,11 +72,11 @@ class image_texture : public texture {
         u = interval(0.0f,1.0f).clamp(u);
         v = 1.0f - interval(0.0f,1.0f).clamp(v);  // Flip V to image coordinates
 
-        auto i = int(u * image_rd.image_width);
-        auto j = int(v * image_rd.image_height);
-        auto pixel = pixel_data(i,j);
+        const auto i = static_cast<int>(u * image_rd.image_width);
+        const auto j = static_cast<int>(v * image_rd.image_height);
+        const auto pixel = pixel_data(i,j);
 
-        auto color_scale = 1.0f / 255.0f;
+        constexpr auto color_scale = 1.0f / 255.0f;
         return color(color_scale*pixel[0], color_scale*pixel[1], color_scale*pixel[2]);
     }
 
@@ -92,7 +92,7 @@ class image_texture : public texture {
         return image_rd.image_data + y*image_rd.bytes_per_scanline() + x*image_rd.bytes_per_pixel;
       }
 
-    __host__ __device__ static int clamp(int x, int low, int high) {
+    __host__ __device__ static int clamp(const int x, const int low, const int high) {
         // Return the value clamped to the range [low, high).
         if (x < low) return low;
         if (x < high) return x;

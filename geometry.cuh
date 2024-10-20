@@ -8,28 +8,28 @@
 #include "hittable_list.cuh"
 #include "aabb.cuh"
 
-class sphere : public hittable {
+class sphere final : public hittable {
   public:
     // Stationary Sphere
-    __host__ __device__ sphere(const point3& static_center, float radius, material* mat)
+    __host__ __device__ sphere(const point3& static_center, const float radius, material* mat)
       : center(static_center, vec3(0,0,0)), radius(max(0.0f,radius)), mat(mat)
     {
-        auto rvec = vec3(radius, radius, radius);
+        const auto rvec = vec3(radius, radius, radius);
         bbox = aabb(static_center - rvec, static_center + rvec);
     }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
-        point3 current_center = center.origin();
-        vec3 oc = current_center - r.origin();
-        auto a = glm::dot(r.direction(), r.direction());
-        auto h = dot(r.direction(), oc);
-        auto c = glm::dot(oc, oc) - radius*radius;
+        const point3 current_center = center.origin();
+        const vec3 oc = current_center - r.origin();
+        const auto a = glm::dot(r.direction(), r.direction());
+        const auto h = dot(r.direction(), oc);
+        const auto c = glm::dot(oc, oc) - radius*radius;
 
-        auto discriminant = h*h - a*c;
+        const auto discriminant = h*h - a*c;
         if (discriminant < 0)
             return false;
 
-        auto sqrtd = std::sqrt(discriminant);
+        const auto sqrtd = std::sqrt(discriminant);
 
         // Find the nearest root that lies in the acceptable range.
         auto root = (h - sqrtd) / a;
@@ -41,7 +41,7 @@ class sphere : public hittable {
 
         rec.t = root;
         rec.p = r.at(rec.t);
-        vec3 outward_normal = (rec.p - current_center) / radius;
+        const vec3 outward_normal = (rec.p - current_center) / radius;
         rec.set_face_normal(r, outward_normal);
         get_sphere_uv(outward_normal, rec.u, rec.v);
         rec.mat = mat;
@@ -65,14 +65,14 @@ class sphere : public hittable {
         //     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
         //     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
 
-        auto theta = std::acos(-p.y);
-        auto phi = std::atan2(-p.z, p.x) + pi;
+        const auto theta = std::acos(-p.y);
+        const auto phi = std::atan2(-p.z, p.x) + pi;
 
         u = phi / (2*pi);
         v = theta / pi;
     }
 };
-class quad : public hittable {
+class quad final : public hittable {
   public:
     __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
       : Q(Q), u(u), v(v), mat(mat)
@@ -85,17 +85,17 @@ class quad : public hittable {
         set_bounding_box();
     }
 
-    __host__ __device__ virtual void set_bounding_box() {
+    __host__ __device__ void set_bounding_box() {
         // Compute the bounding box of all four vertices.
-        auto bbox_diagonal1 = aabb(Q, Q + u + v);
-        auto bbox_diagonal2 = aabb(Q + u, Q + v);
+        const auto bbox_diagonal1 = aabb(Q, Q + u + v);
+        const auto bbox_diagonal2 = aabb(Q + u, Q + v);
         bbox = aabb(bbox_diagonal1, bbox_diagonal2);
     }
 
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
-        auto denom = dot(normal, r.direction());
+        const auto denom = dot(normal, r.direction());
 
         // No hit if the ray is parallel to the plane.
         if (std::fabs(denom) < 1e-8)
@@ -107,10 +107,10 @@ class quad : public hittable {
             return false;
 
         // Determine if the hit point lies within the planar shape using its plane coordinates.
-        auto intersection = r.at(t);
-        vec3 planar_hitpt_vector = intersection - Q;
-        auto alpha = dot(w, cross(planar_hitpt_vector, v));
-        auto beta = dot(w, cross(u, planar_hitpt_vector));
+        const auto intersection = r.at(t);
+        const vec3 planar_hitpt_vector = intersection - Q;
+        const auto alpha = dot(w, cross(planar_hitpt_vector, v));
+        const auto beta = dot(w, cross(u, planar_hitpt_vector));
 
         if (!is_interior(alpha, beta, rec))
             return false;
@@ -124,8 +124,8 @@ class quad : public hittable {
         return true;
     }
 
-    __host__ __device__ virtual bool is_interior(float a, float b, hit_record& rec) const {
-        interval unit_interval = interval(0, 1);
+    __host__ __device__ static bool is_interior(float a, float b, hit_record& rec) {
+        const auto unit_interval = interval(0, 1);
         // Given the hit point in plane coordinates, return false if it is outside the
         // primitive, otherwise set the hit record UV coordinates and return true.
 
@@ -152,15 +152,15 @@ __host__ __device__ inline hittable_list* create_box(const point3& a, const poin
 {
     // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
 
-    auto sides = new hittable_list(6);
+    const auto sides = new hittable_list(6);
 
     // Construct the two opposite vertices with the minimum and maximum coordinates.
-    auto min = point3(std::fmin(a.x,b.x), std::fmin(a.y,b.y), std::fmin(a.z,b.z));
-    auto max = point3(std::fmax(a.x,b.x), std::fmax(a.y,b.y), std::fmax(a.z,b.z));
+    const auto min = point3(std::fmin(a.x,b.x), std::fmin(a.y,b.y), std::fmin(a.z,b.z));
+    const auto max = point3(std::fmax(a.x,b.x), std::fmax(a.y,b.y), std::fmax(a.z,b.z));
 
-    auto dx = vec3(max.x - min.x, 0, 0);
-    auto dy = vec3(0, max.y - min.y, 0);
-    auto dz = vec3(0, 0, max.z - min.z);
+    const auto dx = vec3(max.x - min.x, 0, 0);
+    const auto dy = vec3(0, max.y - min.y, 0);
+    const auto dz = vec3(0, 0, max.z - min.z);
 
     sides->add(new quad(point3(min.x, min.y, max.z),  dx,  dy, mat)); // front
     sides->add(new quad(point3(max.x, min.y, max.z), -dz,  dy, mat)); // right

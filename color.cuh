@@ -7,7 +7,7 @@
 using color = vec3;
 
 
-__host__ __device__ inline float linear_to_gamma(float linear_component)
+__host__ __device__ inline float linear_to_gamma(const float linear_component)
 {
     if (linear_component > 0)
         return std::sqrt(linear_component);
@@ -17,7 +17,7 @@ __host__ __device__ inline float linear_to_gamma(float linear_component)
 
 __host__ __device__ void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte);
 
-void write_color(std::ostream& out, const color& pixel_color) {
+inline void write_color(std::ostream& out, const color& pixel_color) {
     unsigned int rbyte;
     unsigned int gbyte;
     unsigned int bbyte;
@@ -27,7 +27,7 @@ void write_color(std::ostream& out, const color& pixel_color) {
     out << rbyte << ' ' << gbyte << ' ' << bbyte << '\n';
 }
 
-__host__ __device__ unsigned int pixel_from_color(const color& pixel_color) {
+__host__ __device__ inline unsigned int pixel_from_color(const color& pixel_color) {
     unsigned int rbyte;
     unsigned int gbyte;
     unsigned int bbyte;
@@ -35,20 +35,20 @@ __host__ __device__ unsigned int pixel_from_color(const color& pixel_color) {
     return (rbyte<<16)+(gbyte<<8)+(bbyte);
 }
 
-__host__ __device__ void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte) {
+__host__ __device__ inline void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte) {
     auto r = pixel_color.x;
     auto g = pixel_color.y;
     auto b = pixel_color.z;
     // Translate the [0,1] component values to the byte range [0,255].
-    const interval intensity(0.000, 0.999);
+    const interval intensity(0.000f, 0.999f);
     // Apply a linear to gamma transform for gamma 2
     r = linear_to_gamma(r);
     g = linear_to_gamma(g);
     b = linear_to_gamma(b);
 
-    rbyte= int(256 * intensity.clamp(r));
-    gbyte= int(256 * intensity.clamp(g));
-    bbyte= int(256 * intensity.clamp(b));
+    rbyte= static_cast<unsigned int>(256 * intensity.clamp(r));
+    gbyte= static_cast<unsigned int>(256 * intensity.clamp(g));
+    bbyte= static_cast<unsigned int>(256 * intensity.clamp(b));
 
 }
 

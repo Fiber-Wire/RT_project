@@ -14,7 +14,7 @@ __host__ __device__ inline bool near_zero(const vec3 &v) {
     constexpr float s = 1e-8f;
     return (std::fabs(v.x) < s) && (std::fabs(v.y) < s) && (std::fabs(v.z) < s);
 }
-__host__ __device__ inline vec3 random_in_cube(float min, float max, curandState* rnd) {
+__host__ __device__ inline vec3 random_in_cube(const float min, const float max, curandState* rnd) {
     return {random_float(min, max, rnd), random_float(min, max, rnd), random_float(min, max, rnd)};
 }
 
@@ -35,7 +35,7 @@ __host__ __device__ inline vec3 random_unit_vector(curandState* rnd) {
 }
 
 __host__ __device__ inline vec3 random_on_hemisphere(const vec3& normal, curandState* rnd) {
-    vec3 on_unit_sphere = random_unit_vector(rnd);
+    const vec3 on_unit_sphere = random_unit_vector(rnd);
     if (dot(on_unit_sphere, normal) > 0.0f) {
         // In the same hemisphere as the normal
         return on_unit_sphere;
@@ -49,10 +49,10 @@ __host__ __device__ inline vec3 reflect(const vec3& v, const vec3& n) {
     return v - 2*dot(v,n)*n;
 }
 
-__host__ __device__ inline vec3 refract(const vec3& uv, const vec3& n, float etai_over_etat) {
-    auto cos_theta = std::fmin(dot(-uv, n), 1.0f);
-    vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
-    vec3 r_out_parallel = -std::sqrt(std::fabs(1.0f - glm::dot(r_out_perp,r_out_perp))) * n;
+__host__ __device__ inline vec3 refract(const vec3& uv, const vec3& n, const float etai_over_etat) {
+    const auto cos_theta = std::fmin(dot(-uv, n), 1.0f);
+    const vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
+    const vec3 r_out_parallel = -std::sqrt(std::fabs(1.0f - glm::dot(r_out_perp,r_out_perp))) * n;
     return r_out_perp + r_out_parallel;
 }
 

@@ -4,7 +4,7 @@
 #include "aabb.cuh"
 #include "hittable.cuh"
 
-class hittable_list : public hittable {
+class hittable_list final : public hittable {
   public:
     hittable** objects{};
     int count{};

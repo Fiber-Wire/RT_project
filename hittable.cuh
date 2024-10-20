@@ -39,7 +39,7 @@ class hittable {
 };
 
 
-class translate : public hittable {
+class translate final : public hittable {
   public:
     __host__ __device__ translate(hittable *object, const vec3& offset)
       : object(object), offset(offset)
@@ -49,7 +49,7 @@ class translate : public hittable {
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         // Move the ray backwards by the offset
-        ray offset_r(r.origin() - offset, r.direction());
+        const ray offset_r(r.origin() - offset, r.direction());
 
         // Determine whether an intersection exists along the offset ray (and if so, where)
         if (!object->hit(offset_r, ray_t, rec))
@@ -70,10 +70,10 @@ class translate : public hittable {
 };
 
 
-class rotate_y : public hittable {
+class rotate_y final : public hittable {
   public:
-    __host__ __device__ rotate_y(hittable* object, float angle) : object(object) {
-        auto radians = degrees_to_radians(angle);
+    __host__ __device__ rotate_y(hittable* object, const float angle) : object(object) {
+        const auto radians = degrees_to_radians(angle);
         sin_theta = std::sin(radians);
         cos_theta = std::cos(radians);
         bbox = object->bounding_box();
@@ -84,12 +84,12 @@ class rotate_y : public hittable {
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {
                 for (int k = 0; k < 2; k++) {
-                    auto x = i*bbox.x.max + (1-i)*bbox.x.min;
-                    auto y = j*bbox.y.max + (1-j)*bbox.y.min;
-                    auto z = k*bbox.z.max + (1-k)*bbox.z.min;
+                    const auto x = i*bbox.x.max + (1-i)*bbox.x.min;
+                    const auto y = j*bbox.y.max + (1-j)*bbox.y.min;
+                    const auto z = k*bbox.z.max + (1-k)*bbox.z.min;
 
-                    auto newx =  cos_theta*x + sin_theta*z;
-                    auto newz = -sin_theta*x + cos_theta*z;
+                    const auto newx =  cos_theta*x + sin_theta*z;
+                    const auto newz = -sin_theta*x + cos_theta*z;
 
                     vec3 tester(newx, y, newz);
 
@@ -108,19 +108,19 @@ class rotate_y : public hittable {
 
         // Transform the ray from world space to object space.
 
-        auto origin = point3(
+        const auto origin = point3(
             (cos_theta * r.origin().x) - (sin_theta * r.origin().z),
             r.origin().y,
             (sin_theta * r.origin().x) + (cos_theta * r.origin().z)
         );
 
-        auto direction = vec3(
+        const auto direction = vec3(
             (cos_theta * r.direction().x) - (sin_theta * r.direction().z),
             r.direction().y,
             (sin_theta * r.direction().x) + (cos_theta * r.direction().z)
         );
 
-        ray rotated_r(origin, direction);
+        const ray rotated_r(origin, direction);
 
         // Determine whether an intersection exists in object space (and if so, where).
 

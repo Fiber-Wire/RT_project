@@ -36,20 +36,20 @@ void cornell_box() {
     hittable_list world{1000};
     std::vector<material*> objects;
 
-    auto red   = new lambertian(color(.65, .05, .05));
-    auto white = new lambertian(color(.73, .73, .73));
-    auto green = new lambertian(color(.12, .45, .15));
-    auto light = new diffuse_light(color(15, 15, 15));
+    const auto red   = new lambertian(color(.65, .05, .05));
+    const auto white = new lambertian(color(.73, .73, .73));
+    const auto green = new lambertian(color(.12, .45, .15));
+    const auto light = new diffuse_light(color(15, 15, 15));
     objects.push_back(red);
     objects.push_back(white);
     objects.push_back(green);
     objects.push_back(light);
-    auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green);
-    auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red);
-    auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light);
-    auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white);
-    auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white);
-    auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white);
+    const auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green);
+    const auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red);
+    const auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light);
+    const auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white);
+    const auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white);
+    const auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white);
 
     world.add(quad_1);
     world.add(quad_2);
@@ -59,13 +59,13 @@ void cornell_box() {
     world.add(quad_6);
 
     hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white);
-    auto box1_rotate = new rotate_y(box1,15);
-    auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
+    const auto box1_rotate = new rotate_y(box1,15);
+    const auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
     world.add(box1_translate);
 
     hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white);
-    auto box2_rotate = new rotate_y(box2, -18);
-    auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
+    const auto box2_rotate = new rotate_y(box2, -18);
+    const auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
     world.add(box2_translate);
 
     camera cam;
@@ -155,15 +155,15 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
 }
 
 __global__ void final_scene_build_cuda(bvh_node** world_ptr, curandState* states, image_record* image_rd) {
-    auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        auto temp = new hittable_list{1};
+        const auto temp = new hittable_list{1};
         *temp = final_scene_build(states,image_rd);
         *world_ptr = static_cast<bvh_node *>(temp->get_objects()[0]);
     }
 }
 
-__host__ __device__ camera final_camera(int image_width, int samples_per_pixel, int max_depth) {
+__host__ __device__ camera final_camera(const int image_width, const int samples_per_pixel, const int max_depth) {
     camera cam;
 
     cam.aspect_ratio      = 1.0;
@@ -183,7 +183,7 @@ void render_scene(const hittable_list &scene, camera &cam) {
     cam.render(scene);
 }
 
-void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
+void render_thread(camera &cam, const hittable_list &scene, const std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             cam.render_parallel(scene, image);
@@ -194,7 +194,7 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
 }
 
 __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<unsigned int> image, curandState* devStates) {
-    auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
     static_assert(threadPerPixel<=BLOCKDIM_X);
@@ -202,11 +202,11 @@ __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<
         cam->initialize();
     }
     auto devState = devStates[tid];
-    auto gridSize = blockDim.x * gridDim.x;
-    auto width = cam->image_width;
-    auto scene = *scenepptr;
+    const auto gridSize = blockDim.x * gridDim.x;
+    const auto width = cam->image_width;
+    const auto scene = *scenepptr;
     for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
-        auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devState, tid%threadPerPixel);
+        const auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devState, tid%threadPerPixel);
         if (tid%threadPerPixel == 0) {
             image[pixelId] = pixel_result;
         }
@@ -215,11 +215,11 @@ __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<
 }
 
 void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
-    int height = int(cam.image_width/cam.aspect_ratio);
-    int width  = cam.image_width;
+    const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
+    const int width  = cam.image_width;
     unsigned int* imageGpuPtr{};
     cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
-    std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
+    const std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
@@ -232,13 +232,13 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
 }
 
 void render_scene_realtime(hittable_list &scene, camera &cam) {
-    int height = int(cam.image_width/cam.aspect_ratio);
+    const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
     auto surface = sdl_raii::Surface{cam.image_width, height};
-    auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
+    const auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
     std::promise<void> render_finished;
-    std::future<void> render_finished_future = render_finished.get_future();
+    const std::future<void> render_finished_future = render_finished.get_future();
     std::thread{[=, &render_finished, &cam, &scene] {
         render_thread(cam, scene, image);
         render_finished.set_value_at_thread_exit();
@@ -272,13 +272,13 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
 }
 
 void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
-    int height = int(cam.image_width/cam.aspect_ratio);
+    const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
     auto surface = sdl_raii::Surface{cam.image_width, height};
-    auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
+    const auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
     std::promise<void> render_finished;
-    std::future<void> render_finished_future = render_finished.get_future();
+    const std::future<void> render_finished_future = render_finished.get_future();
     std::thread{[=, &render_finished, &cam, &scene] {
         render_thread_cuda(cam, cam_cuda, scene, image, devStates);
         render_finished.set_value_at_thread_exit();
@@ -312,7 +312,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
 }
 
 __global__ void initCurand(curandState *state, unsigned long seed){
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    const auto idx = threadIdx.x + blockIdx.x * blockDim.x;
     curand_init(seed, idx, 0, &state[idx]);
 }
 
@@ -322,18 +322,18 @@ int main(int argc, char* argv[]) {
 
     auto image_ld = image_loader("earthmap.jpg");
     auto rec_cuda = image_ld.get_record_cuda();
-    auto rec = image_ld.get_record();
-    utils::CuArrayRAII image_rd{&rec_cuda};
+    const auto rec = image_ld.get_record();
+    const utils::CuArrayRAII image_rd{&rec_cuda};
 
-    utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
+    const utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
     // Cherry-picked seed
     initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
-    utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
+    const utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
 
-    auto cam = final_camera(1600, 1024, 8);
-    utils::CuArrayRAII camGpuPtr{&cam};
+    auto cam = final_camera(400, 32, 4);
+    const utils::CuArrayRAII camGpuPtr{&cam};
     if (argc!=1) {
-        auto scene = final_scene_build(nullptr,&rec);
+        const auto scene = final_scene_build(nullptr,&rec);
         render_scene(scene, cam);
     } else {
         if (false) {

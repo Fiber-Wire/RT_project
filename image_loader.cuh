@@ -27,11 +27,11 @@ class image_loader {
   public:
     image_loader() {}
 
-    image_loader(const char* image_filename) {
+    explicit image_loader(const char* image_filename) {
         // Loads image data from the specified file.
         // If the image was not loaded successfully, width() and height() will return 0.
 
-        auto filename = std::string(image_filename);
+        const auto filename = std::string(image_filename);
 
         if (load("images/" + filename)) return;
 
@@ -116,7 +116,7 @@ class image_loader {
         // Convert the linear floating point pixel data to bytes, storing the resulting byte
         // data in the `bdata` member.
 
-        int total_bytes = image_width * image_height * bytes_per_pixel;
+        const int total_bytes = image_width * image_height * bytes_per_pixel;
         bdata = new unsigned char[total_bytes];
 
         // Iterate through all pixel components, converting from [0.0, 1.0] float values to

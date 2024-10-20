@@ -8,7 +8,7 @@ class interval {
 
     __host__ __device__ interval() : min(+INFINITY), max(-INFINITY) {} // Default interval is empty
 
-    __host__ __device__ interval(float min, float max) : min(min), max(max) {}
+    __host__ __device__ interval(const float min, const float max) : min(min), max(max) {}
 
     __host__ __device__ interval(const interval& a, const interval& b) {
         // Create the interval tightly enclosing the two input intervals.
@@ -20,38 +20,38 @@ class interval {
         return max - min;
     }
 
-    __host__ __device__ bool contains(float x) const {
+    __host__ __device__ bool contains(const float x) const {
         return min <= x && x <= max;
     }
 
-    __host__ __device__ bool surrounds(float x) const {
+    __host__ __device__ bool surrounds(const float x) const {
         return min < x && x < max;
     }
 
-    __host__ __device__ float clamp(float x) const {
+    __host__ __device__ float clamp(const float x) const {
         if (x < min) return min;
         if (x > max) return max;
         return x;
     }
 
-    __host__ __device__ interval expand(float delta) const {
+    __host__ __device__ interval expand(const float delta) const {
         auto padding = delta/2;
         return interval(min - padding, max + padding);
     }
 
     __host__ __device__ static interval empty() {
-        return {+INFINITY, -INFINITY};
+        return {+infinity, -infinity};
     }
     __host__ __device__ static interval universe() {
-        return {-INFINITY, +INFINITY};
+        return {-infinity, +infinity};
     }
 };
 
-__host__ __device__ interval operator+(const interval& ival, float displacement) {
-    return interval(ival.min + displacement, ival.max + displacement);
+__host__ __device__ inline interval operator+(const interval& ival, const float displacement) {
+    return {ival.min + displacement, ival.max + displacement};
 }
 
-__host__ __device__ interval operator+(float displacement, const interval& ival) {
+__host__ __device__ inline interval operator+(const float displacement, const interval& ival) {
     return ival + displacement;
 }
 

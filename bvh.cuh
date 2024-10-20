@@ -38,7 +38,7 @@ class bvh_node final : public hittable {
                 node->bbox = aabb(node->bbox, objects[object_index]->bounding_box());
 
             int axis = node->bbox.longest_axis();
-            size_t object_span = end_t - start_t;
+            const size_t object_span = end_t - start_t;
 
             // TODO: add bvh_node detection, or split scene and bvh altogether
             if (object_span == 1) {
@@ -67,13 +67,13 @@ class bvh_node final : public hittable {
                                 {return box_compare(lhs, rhs, axis);});
 #endif
                 }
-                auto mid = start_t + object_span/2;
+                const auto mid = start_t + object_span/2;
                 node->child_bvh = true;
                 node->right = bvh_node_list + 1;
                 node->left = bvh_node_list;
                 info_stack[stack_index + 2] = {bvh_node_list, start_t, mid};//left
                 info_stack[stack_index + 1] = {bvh_node_list + 1, mid, end_t};//right
-                int temp_depth = glm::log2(object_span);
+                const int temp_depth = glm::log2(object_span);
                 node->depth = glm::pow(2,temp_depth)==object_span? temp_depth-1:temp_depth;
                 bvh_node_list += 2;
                 stack_index += 2;
@@ -120,7 +120,7 @@ class bvh_node final : public hittable {
         while (stack_index > -1) {
             const auto current_node = bvh_stack[stack_index];
             stack_index--;
-            bool current_hit = current_node->bbox.hit(r, interval(ray_t.min, max_t));
+            const bool current_hit = current_node->bbox.hit(r, interval(ray_t.min, max_t));
             if (current_hit) {
                 if (current_node->child_bvh) {
                     stack_index+=1;
@@ -128,11 +128,11 @@ class bvh_node final : public hittable {
                     stack_index+=1;
                     bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->left);
                 } else {
-                    bool hit_left = current_node->left->hit(r, interval(ray_t.min, max_t), rec);
+                    const bool hit_left = current_node->left->hit(r, interval(ray_t.min, max_t), rec);
                     max_t = hit_left ? rec.t : max_t;
                     is_hit = is_hit || hit_left;
                     if (current_node->right != current_node->left) {
-                        bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
+                        const bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
                         max_t = hit_right ? rec.t : max_t;
                         is_hit = is_hit || hit_right;
                     }
@@ -152,10 +152,10 @@ class bvh_node final : public hittable {
     aabb bbox;
 
     __host__ __device__ static bool box_compare(
-        const hittable* a, const hittable* b, int axis_index
+        const hittable* a, const hittable* b, const int axis_index
     ) {
-        auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
-        auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
+        const auto a_axis_interval = a->bounding_box().axis_interval(axis_index);
+        const auto b_axis_interval = b->bounding_box().axis_interval(axis_index);
         return a_axis_interval.min < b_axis_interval.min;
     }
 };
