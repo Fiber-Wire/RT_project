@@ -14,7 +14,7 @@ struct bvh_node_construct_info {
     size_t end;
 };
 
-class bvh_node : public hittable {
+class bvh_node final : public hittable {
   public:
     __host__ __device__ bvh_node(): bbox(aabb::empty()) {}
     __host__ __device__ explicit bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
@@ -125,16 +125,17 @@ class bvh_node : public hittable {
                 if (current_node->child_bvh) {
                     stack_index+=1;
                     bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->right);
-                    if (current_node->left != current_node->right) {
-                        stack_index+=1;
-                        bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->left);
-                    }
+                    stack_index+=1;
+                    bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->left);
                 } else {
                     bool hit_left = current_node->left->hit(r, interval(ray_t.min, max_t), rec);
                     max_t = hit_left ? rec.t : max_t;
-                    bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
-                    max_t = hit_right ? rec.t : max_t;
-                    is_hit = is_hit || hit_left || hit_right;
+                    is_hit = is_hit || hit_left;
+                    if (current_node->right != current_node->left) {
+                        bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
+                        max_t = hit_right ? rec.t : max_t;
+                        is_hit = is_hit || hit_right;
+                    }
                 }
             }
         }

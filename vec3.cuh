@@ -11,7 +11,7 @@ using point3 = vec3;
 // Vector Utility Functions
 __host__ __device__ inline bool near_zero(const vec3 &v) {
     // Return true if the vector is close to zero in all dimensions.
-    auto s = 1e-8;
+    constexpr float s = 1e-8f;
     return (std::fabs(v.x) < s) && (std::fabs(v.y) < s) && (std::fabs(v.z) < s);
 }
 __host__ __device__ inline vec3 random_in_cube(float min, float max, curandState* rnd) {
@@ -22,29 +22,27 @@ __host__ __device__ inline vec3 unit_vector(const vec3& v) {
     return glm::normalize(v);
 }
 
-__host__ __device__ inline vec3 random_in_unit_disk(curandState* rnd) {
-    while (true) {
-        auto p = vec3(random_float(-1,1, rnd), random_float(-1,1, rnd), 0);
-        if (glm::dot(p,p) < 1)
-            return p;
-    }
+__host__ __device__ inline glm::vec2 random_unit_vector2D(curandState* rnd) {
+    const float azimuth = random_float(rnd) * 2 * pi;
+    return {sin(azimuth), cos(azimuth)};
 }
 
 __host__ __device__ inline vec3 random_unit_vector(curandState* rnd) {
-    while (true) {
-        auto p = vec3(random_float(-1,1, rnd), random_float(-1,1, rnd), random_float(-1,1, rnd));
-        auto lensq = glm::dot(p,p);
-        if (1e-160 < lensq && lensq <= 1.0)
-            return glm::normalize(p);
-    }
+    float z = 2.0f*random_float(rnd) - 1.0f;
+    // z is in the range [-1,1]
+    const auto planar = random_unit_vector2D(rnd) * std::sqrt(1.0f-z*z);
+    return {planar.x, planar.y, z};
 }
 
 __host__ __device__ inline vec3 random_on_hemisphere(const vec3& normal, curandState* rnd) {
     vec3 on_unit_sphere = random_unit_vector(rnd);
-    if (dot(on_unit_sphere, normal) > 0.0) // In the same hemisphere as the normal
+    if (dot(on_unit_sphere, normal) > 0.0f) {
+        // In the same hemisphere as the normal
         return on_unit_sphere;
-    else
+    }
+    else {
         return -on_unit_sphere;
+    }
 }
 
 __host__ __device__ inline vec3 reflect(const vec3& v, const vec3& n) {

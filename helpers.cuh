@@ -25,8 +25,7 @@ constexpr float pi = 3.1415926535897932385;
 // Utility Functions
 
 __host__ __device__ inline float degrees_to_radians(float degrees) {
-    const float pi = 3.1415926535897932385;
-    return degrees * pi / 180.0;
+    return degrees * pi / 180.0f;
 }
 
 __host__ __device__ inline float random_float(curandState* rnd) {

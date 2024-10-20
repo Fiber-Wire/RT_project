@@ -42,21 +42,21 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const hittable* world, int j, int i, curandState *rnd) {
+    __host__ __device__ unsigned int render_pixel(const hittable* world, int row_id, int col_id, curandState *rnd) {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
-            ray r = get_ray(i, j, rnd);
+            ray r = get_ray(col_id, row_id, rnd);
             pixel_color += ray_color(r, max_depth, world, rnd);
         }
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
     template <int thread_per_pixel>
-    __device__ unsigned int render_pixel(const hittable* world, const int j, const int i, curandState *rnd,
+    __device__ unsigned int render_pixel(const bvh_node* world, const int row_id, const int col_id, curandState *rnd,
                                          const int thread_index) const {
         color pixel_color(0,0,0);
         for (int sample = thread_index; sample < samples_per_pixel; sample+=thread_per_pixel) {
-            ray r = get_ray(i, j, rnd);
+            ray r = get_ray(col_id, row_id, rnd);
             pixel_color += ray_color(r, max_depth, world, rnd);
         }
         __syncwarp();
@@ -142,14 +142,14 @@ class camera {
 
 
 
-    __host__ __device__ ray get_ray(int i, int j, curandState* rnd) const {
+    __host__ __device__ ray get_ray(int col_id, int row_id, curandState* rnd) const {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
         auto offset = sample_square(rnd);
         auto pixel_sample = pixel00_loc
-                          + ((i + offset.x) * pixel_delta_u)
-                          + ((j + offset.y) * pixel_delta_v);
+                          + ((col_id + offset.x) * pixel_delta_u)
+                          + ((row_id + offset.y) * pixel_delta_v);
 
         auto ray_origin = center;
         auto ray_direction = pixel_sample - ray_origin;
@@ -159,7 +159,7 @@ class camera {
 
     __host__ __device__ vec3 sample_square(curandState* rnd) const {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
-        return vec3(random_float(rnd) - 0.5, random_float(rnd) - 0.5, 0);
+        return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
     __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world, curandState* rnd) const {
@@ -169,15 +169,18 @@ class camera {
             hit_record rec;
 
             // If the ray hits nothing, return the background color.
-            if (!world->hit(cur_ray, interval(0.001, INFINITY), rec))
+            if (!world->hit(cur_ray, interval(0.001f, INFINITY), rec))
                 return cur_attenuation * background;
 
             ray scattered;
             color attenuation;
-            color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
 
-            if (!rec.mat->scatter(cur_ray, rec, attenuation, scattered, rnd))
+            if (rec.mat->will_scatter()) {
+                rec.mat->scatter(cur_ray, rec, attenuation, scattered, rnd);
+            } else {
+                color color_from_emission = rec.mat->emitted(rec.u, rec.v, rec.p);
                 return cur_attenuation * color_from_emission;
+            }
 
             cur_attenuation *= attenuation;
             cur_ray = scattered;

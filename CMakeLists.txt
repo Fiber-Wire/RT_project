@@ -31,7 +31,7 @@ target_include_directories(commons_headers INTERFACE include)
 
 
 add_executable(RT_project  ${SOURCE_RT_PROJECT})
-set_property(TARGET RT_project PROPERTY CUDA_ARCHITECTURES 72)
+set_property(TARGET RT_project PROPERTY CUDA_ARCHITECTURES 75 89)
 set_target_properties(RT_project PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(RT_project PRIVATE glm::glm)

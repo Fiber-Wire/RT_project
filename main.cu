@@ -16,7 +16,7 @@
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
 #define BLOCKDIM_X 64
-#define GRIDDIM_X (625*2)
+#define GRIDDIM_X (400*400/BLOCKDIM_X)
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
     std::binary_semaphore frame_rendered{0};
@@ -151,12 +151,12 @@ hittable_list final_scene_build() {
 __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_record* image_rd) {
     hittable_list boxes1{400};
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
-    hittable_list world{5};
+    hittable_list world{7};
 
     int boxes_per_side = 20;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 200.0f;
+            auto w = 100.0f;
             auto x0 = -1000.0f + i*w;
             auto z0 = -1000.0f + j*w;
             auto y0 = 0.0f;
@@ -182,13 +182,22 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     world.add(bvh_node_boxes1);
 
     auto light = new diffuse_light(color(7, 7, 7));
-    world.add(new sphere{point3{123, 554, 147}, 100, light});
+    auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
+    world.add(quad_light_1);
 
     auto dielectric_sphere = new dielectric(1.5);
     auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
     world.add(dielectric_sphere_1);
 
-    int ns = 10;
+    auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
+    auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
+    world.add(metal_sphere_1);
+
+    auto dielectric_ground = new dielectric(1.5);
+    auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
+    world.add(dielectric_ground_1);
+
+    int ns = 1000;
     auto boxes2 = new hittable_list{ns};
     auto white = new lambertian(color(.73, .73, .73));
     for (int j = 0; j < ns; j++) {
@@ -196,7 +205,6 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
         boxes2->add(boxes2_sphere);
     }
 
-    // FIXME: bvh_node(hittable_list) will cause stack overflow in CUDA
     auto bvh_node_box = new bvh_node(*boxes2);
     auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
     auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
@@ -208,11 +216,12 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     return tree;
 }
 
-__global__ void debug_scene_build_cuda(hittable_list** world_ptr, curandState* states, image_record* image_rd) {
+__global__ void debug_scene_build_cuda(bvh_node** world_ptr, curandState* states, image_record* image_rd) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        *world_ptr = new hittable_list{1};
-        **world_ptr = debug_scene_build(states,image_rd);
+        auto temp = new hittable_list{1};
+        *temp = debug_scene_build(states,image_rd);
+        *world_ptr = static_cast<bvh_node *>(temp->get_objects()[0]);
     }
 }
 
@@ -246,7 +255,7 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
     }
 }
 
-__global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::span<unsigned int> image, curandState* devStates) {
+__global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
@@ -267,7 +276,7 @@ __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::
     devStates[tid] = devState;
 }
 
-void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
+void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
     int height = int(cam.image_width/cam.aspect_ratio);
     int width  = cam.image_width;
     unsigned int* imageGpuPtr{};
@@ -324,7 +333,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
-void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
+void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
     int height = int(cam.image_width/cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -380,8 +389,8 @@ int main(int argc, char* argv[]) {
 
     utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
     // Cherry-picked seed
-    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 5);
-    utils::CuArrayRAII<hittable_list*> sceneGpuPtr{nullptr};
+    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
+    utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
 
     auto cam = final_camera(400, 32, 4);
     utils::CuArrayRAII camGpuPtr{&cam};

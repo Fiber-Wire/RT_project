@@ -31,10 +31,10 @@ class solid_color : public texture {
 class checker_texture : public texture {
   public:
     __host__ __device__ checker_texture(float scale, texture* even, texture* odd)
-      : inv_scale(1.0 / scale), even(even), odd(odd) {}
+      : inv_scale(1.0f / scale), even(even), odd(odd) {}
 
     __host__ __device__ checker_texture(float scale, const color& c1, const color& c2)
-      : inv_scale(1 / scale) {
+      : inv_scale(1.0f / scale) {
       color_even = solid_color(c1);
       color_odd = solid_color(c2);
       even = &color_even;
@@ -55,8 +55,8 @@ class checker_texture : public texture {
     float inv_scale;
     texture* even;
     texture* odd;
-    solid_color color_even{{0.5,0,0.5}};;
-    solid_color color_odd{{0.5,0,0.5}};;
+    solid_color color_even{{0.5f,0.0f,0.5f}};;
+    solid_color color_odd{{0.0f,0.0f,0.0f}};;
 };
 
 
@@ -66,17 +66,17 @@ class image_texture : public texture {
 
     __host__ __device__ color value(float u, float v, const point3& p) const override {
         // If we have no texture data, then return solid cyan as a debugging aid.
-        if (image_rd.image_height <= 0) return color(0,1,1);
+        if (image_rd.image_height <= 0) return color(0.0f,1.0f,1.0f);
 
         // Clamp input texture coordinates to [0,1] x [1,0]
-        u = interval(0,1).clamp(u);
-        v = 1.0 - interval(0,1).clamp(v);  // Flip V to image coordinates
+        u = interval(0.0f,1.0f).clamp(u);
+        v = 1.0f - interval(0.0f,1.0f).clamp(v);  // Flip V to image coordinates
 
         auto i = int(u * image_rd.image_width);
         auto j = int(v * image_rd.image_height);
         auto pixel = pixel_data(i,j);
 
-        auto color_scale = 1.0 / 255.0;
+        auto color_scale = 1.0f / 255.0f;
         return color(color_scale*pixel[0], color_scale*pixel[1], color_scale*pixel[2]);
     }
 
