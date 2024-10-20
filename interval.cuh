@@ -1,6 +1,6 @@
 #ifndef INTERVAL_H
 #define INTERVAL_H
-
+#include "helpers.cuh"
 
 class interval {
   public:

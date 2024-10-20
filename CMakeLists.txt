@@ -7,6 +7,7 @@ set(CMAKE_CUDA_STANDARD 20)
 
 set ( SOURCE_RT_PROJECT
         main.cu
+        globals.cuh
         aabb.cuh
         bvh.cuh
         camera.cuh

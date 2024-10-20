@@ -16,8 +16,8 @@ class hit_record {
     float v;
 
     vec3 normal;
-
     float t;
+
     bool front_face;
 
     __host__ __device__ void set_face_normal(const ray& r, const vec3& outward_normal) {
@@ -79,8 +79,8 @@ class rotate_y final : public hittable {
         cos_theta = std::cos(radians);
         bbox = object->bounding_box();
 
-        point3 min( INFINITY,  INFINITY,  INFINITY);
-        point3 max(-INFINITY, -INFINITY, -INFINITY);
+        point3 min( infinity,  infinity,  infinity);
+        point3 max(-infinity, -infinity, -infinity);
 
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {

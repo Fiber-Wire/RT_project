@@ -142,7 +142,7 @@ class camera {
 
 
 
-    __host__ __device__ ray get_ray(int col_id, int row_id, curandState* rnd) const {
+    __host__ __device__ ray get_ray(const int col_id, const int row_id, curandState* rnd) const {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
@@ -169,7 +169,7 @@ class camera {
             hit_record rec;
 
             // If the ray hits nothing, return the background color.
-            if (!world->hit(cur_ray, interval(0.001f, INFINITY), rec))
+            if (!world->hit(cur_ray, interval(0.001f, infinity), rec))
                 return cur_attenuation * background;
 
             ray scattered;

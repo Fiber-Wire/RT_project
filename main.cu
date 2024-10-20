@@ -2,6 +2,7 @@
 #include <semaphore>
 #include <string>
 #include <thread>
+#include "globals.cuh"
 #include "sdl_wrapper.hpp"
 #include "helpers.cuh"
 #include "vec.cuh"
@@ -16,26 +17,11 @@
 #include "curand.h"
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
-#define BLOCKDIM_X 64
-#define GRIDDIM_X (400*400/BLOCKDIM_X)
-struct MainRendererComm{
-    std::binary_semaphore frame_start_render{0};
-    std::binary_semaphore frame_rendered{0};
-    std::atomic<bool> stop_render{false};
-};
-MainRendererComm mainRendererComm{};
-void initialize_main_sync_objs(){
-    mainRendererComm.frame_start_render.try_acquire();
-    mainRendererComm.frame_rendered.try_acquire();
-    mainRendererComm.stop_render.store(false);
-}
-void notify_renderer_exit(){
-    mainRendererComm.stop_render.store(true);
-}
 
 void cornell_box() {
     hittable_list world{1000};
     std::vector<material*> objects;
+    auto quads_for_box = new utils::NaiveVector<quad>{12};
 
     const auto red   = new lambertian(color(.65, .05, .05));
     const auto white = new lambertian(color(.73, .73, .73));
@@ -59,12 +45,12 @@ void cornell_box() {
     world.add(quad_5);
     world.add(quad_6);
 
-    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white);
+    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white,quads_for_box);
     const auto box1_rotate = new rotate_y(box1,15);
     const auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
     world.add(box1_translate);
 
-    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white);
+    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white, quads_for_box);
     const auto box2_rotate = new rotate_y(box2, -18);
     const auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
     world.add(box2_translate);
@@ -88,8 +74,29 @@ void cornell_box() {
 __host__ __device__ hittable_list final_scene_build(curandState* rnd, const image_record* image_rd) {
     hittable_list world{8};
 
+    // Geometry primitives
+    auto spheres = new utils::NaiveVector<sphere>{1005};
+    auto quads = new utils::NaiveVector<quad>{2401};
+
+    // Materials
+    //   Textures needed by materials;
+    auto image_texture_emat = new image_texture(image_rd[0]);
+    auto material_handles = new material*[8];
+#ifdef __CUDA_ARCH__
+    CUDA_MATERIALS = material_handles;
+#endif
+    material_handles[0] = new lambertian(color(0.48, 0.83, 0.53));
+    material_handles[1] = new diffuse_light(color(7, 7, 7));
+    material_handles[2] = new dielectric(1.5);
+    material_handles[3] = new metal(color(0.8, 0.8, 0.9), 1.0);
+    material_handles[4] = new dielectric(1.5);
+    material_handles[5] = new lambertian(image_texture_emat);
+    material_handles[6] = new lambertian(color(.73, .73, .73));
+    material_handles[7] = new metal(color(212.0f/256, 175.0f/256, 55.0f/256), 0.025);
+
+
     // 1st item
-    auto ground = new lambertian(color(0.48, 0.83, 0.53));
+    auto ground = material_handles[0];
     int boxes_per_side = 20;
     hittable_list boxes1{boxes_per_side*boxes_per_side};
     for (int i = 0; i < boxes_per_side; i++) {
@@ -100,10 +107,12 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
             auto y0 = 0.0f;
             auto x1 = x0 + w-0.1f;
             // Get identical scene between runs
+            // compute-sanitizer does not like what we do here
+            //auto y1 = random_float(1,101, rnd);
             auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
             auto z1 = z0 + w-0.1f;
 
-            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground, quads);
             boxes1.add(static_cast<hittable *>(box3));
         }
     }
@@ -111,39 +120,40 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
     world.add(bvh_node_boxes1);
 
     // 2nd
-    auto light = new diffuse_light(color(7, 7, 7));
-    auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
-    world.add(quad_light_1);
+    auto light = material_handles[1];
+    quads->push({point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light});
+    world.add(quads->end());
 
     // 3rd
-    auto dielectric_sphere = new dielectric(1.5);
-    auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
-    world.add(dielectric_sphere_1);
+    auto dielectric_sphere = material_handles[2];
+    spheres->push({point3(260, 150, 45), 50,dielectric_sphere});
+    world.add(spheres->end());
 
     //4th
-    auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
-    auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
-    world.add(metal_sphere_1);
+    auto metal_sphere = material_handles[3];
+    spheres->push({point3(0, 150, 145), 50, metal_sphere});
+    world.add(spheres->end());
 
     //5th
-    auto dielectric_ground = new dielectric(1.5);
-    auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
-    world.add(dielectric_ground_1);
+    auto dielectric_ground = material_handles[4];
+    spheres->push({point3(360, 150, 145), 70, dielectric_ground});
+    world.add(spheres->end());
 
     //6th
-    auto image_texture_emat = new image_texture(image_rd[0]);
-    auto lambertian_emat = new lambertian(image_texture_emat);
-    auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
-    world.add(lambertian_emat_sphere_1);
+    auto lambertian_emat = material_handles[5];
+    spheres->push({point3(400, 200, 400), 100, lambertian_emat});
+    world.add(spheres->end());
 
     //7th
     int ns = 1000;
     auto boxes2 = hittable_list{ns};
-    auto white = new lambertian(color(.73, .73, .73));
+    auto white = material_handles[6];
     for (int j = 0; j < ns; j++) {
+        // compute-sanitizer does not like what we do here
+        // auto center = random_in_cube(0,165, rnd);
         auto center = get_rand_vec3(j);
-        auto boxes2_sphere = new sphere(center, 10, white);
-        boxes2.add(boxes2_sphere);
+        spheres->push({center, 10, white});
+        boxes2.add(spheres->end());
     }
     auto bvh_node_box = new bvh_node(boxes2);
     auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
@@ -151,9 +161,9 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
     world.add(bvh_node_box_translate);
 
     //8th
-    auto metal_2 = new metal(color(212.0f/256, 175.0f/256, 55.0f/256), 0.025);
-    auto metal_sphere_2 = new sphere(point3(240, 320, 400), 60, metal_2);
-    world.add(metal_sphere_2);
+    auto metal_2 = material_handles[7];
+    spheres->push({point3(240, 320, 400), 60, metal_2});
+    world.add(spheres->end());
 
     hittable_list tree{1};
     tree.add(new bvh_node{world});
@@ -212,7 +222,10 @@ __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<
     const auto width = cam->image_width;
     const auto scene = *scenepptr;
     for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
-        const auto pixel_result = cam->render_pixel<threadPerPixel>(scene, pixelId/width, pixelId%width, &devState, tid%threadPerPixel);
+        const auto pixel_result = cam->render_pixel<threadPerPixel>(
+            scene,
+            pixelId/width, pixelId%width, &devState,
+            tid%threadPerPixel);
         if (tid%threadPerPixel == 0) {
             image[pixelId] = pixel_result;
         }

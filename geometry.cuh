@@ -10,6 +10,8 @@
 
 class sphere final : public hittable {
   public:
+    __host__ __device__ sphere(): radius(0), mat(nullptr) {}
+
     // Stationary Sphere
     __host__ __device__ sphere(const point3& static_center, const float radius, material* mat)
       : center(static_center, vec3(0,0,0)), radius(max(0.0f,radius)), mat(mat)
@@ -73,6 +75,8 @@ class sphere final : public hittable {
 };
 class quad final : public hittable {
   public:
+    __host__ __device__ quad(): Q(), u(), v(), w(), mat(nullptr), normal(), D(0) {}
+
     __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
       : Q(Q), u(u), v(v), mat(mat)
     {
@@ -97,7 +101,7 @@ class quad final : public hittable {
         const auto denom = dot(normal, r.direction());
 
         // No hit if the ray is parallel to the plane.
-        if (std::fabs(denom) < 1e-8)
+        if (std::fabs(denom) < 1e-8f)
             return false;
 
         // Return false if the hit point parameter t is outside the ray interval.
@@ -145,11 +149,10 @@ class quad final : public hittable {
     float D;
 };
 
-
-__host__ __device__ inline hittable_list* create_box(const point3& a, const point3& b, material* mat)
+/// Returns the 3D box (six sides) that contains the two opposite vertices a & b.
+__host__ __device__ inline hittable_list* create_box(const point3& a, const point3& b, material* mat,
+    utils::NaiveVector<quad>* quads)
 {
-    // Returns the 3D box (six sides) that contains the two opposite vertices a & b.
-
     const auto sides = new hittable_list(6);
 
     // Construct the two opposite vertices with the minimum and maximum coordinates.
@@ -160,12 +163,18 @@ __host__ __device__ inline hittable_list* create_box(const point3& a, const poin
     const auto dy = vec3(0, max.y - min.y, 0);
     const auto dz = vec3(0, 0, max.z - min.z);
 
-    sides->add(new quad(point3(min.x, min.y, max.z),  dx,  dy, mat)); // front
-    sides->add(new quad(point3(max.x, min.y, max.z), -dz,  dy, mat)); // right
-    sides->add(new quad(point3(max.x, min.y, min.z), -dx,  dy, mat)); // back
-    sides->add(new quad(point3(min.x, min.y, min.z),  dz,  dy, mat)); // left
-    sides->add(new quad(point3(min.x, max.y, max.z),  dx, -dz, mat)); // top
-    sides->add(new quad(point3(min.x, min.y, min.z),  dx,  dz, mat)); // bottom
+    quads->push({point3(min.x, min.y, max.z),  dx,  dy, mat}); // front
+    sides->add(quads->end());
+    quads->push({point3(max.x, min.y, max.z), -dz,  dy, mat}); // right
+    sides->add(quads->end());
+    quads->push({point3(max.x, min.y, min.z), -dx,  dy, mat}); // back
+    sides->add(quads->end());
+    quads->push({point3(min.x, min.y, min.z),  dz,  dy, mat}); // left
+    sides->add(quads->end());
+    quads->push({point3(min.x, max.y, max.z),  dx, -dz, mat}); // top
+    sides->add(quads->end());
+    quads->push({point3(min.x, min.y, min.z),  dx,  dz, mat}); // bottom
+    sides->add(quads->end());
 
     return sides;
 }

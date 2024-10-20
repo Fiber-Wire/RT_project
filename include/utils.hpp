@@ -112,6 +112,61 @@ namespace utils {
         size_t n;
     };
 
+    template <class T>
+    class NaiveVector {
+    public:
+        __host__ __device__ NaiveVector(): NaiveVector(1) {}
+        __host__ __device__ explicit NaiveVector(const int capacity): capacity_(capacity) {
+            data = new T[capacity_];
+        }
+
+        __host__ __device__ ~NaiveVector() {
+            delete[] data;
+        }
+
+        __host__ __device__ NaiveVector(const NaiveVector & other) {
+            *this = other;
+        }
+        __host__ __device__ NaiveVector & operator = (const NaiveVector &other) {
+            if (this != &other) {
+                capacity_ = other.capacity_;
+                count = other.count;
+                delete[] data;
+                data = new T[capacity_];
+                memcpy(data, other.data, sizeof(T) * count);
+            }
+            return *this;
+        }
+        __host__ __device__ void push(const T &elem) {
+            if (count == capacity_) {
+                auto new_data = new T[capacity_+10];
+                memcpy(new_data, data, sizeof(T) * count);
+                delete[] data;
+                data = new_data;
+            }
+            data[count] = elem;
+            count += 1;
+        }
+        __host__ __device__ T pop() {
+            if (count > 0) {
+                count -= 1;
+                return data[count];
+            }
+            return {};
+        }
+        __host__ __device__ T* begin() {
+            return data;
+        }
+        __host__ __device__ T* end() {
+            return data + count-1;
+        }
+
+        T* data{};
+        int count{};
+    private:
+        int capacity_{};
+    };
+
     template <int number>
     consteval unsigned int integer_log2() {
         if constexpr (number==1) {
