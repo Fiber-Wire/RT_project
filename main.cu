@@ -84,76 +84,13 @@ void cornell_box() {
     cam.render(world);
 }
 
+__host__ __device__ hittable_list final_scene_build(curandState* rnd, const image_record* image_rd) {
+    hittable_list world{7};
 
-hittable_list final_scene_build() {
+    // 1st item
     auto ground = new lambertian(color(0.48, 0.83, 0.53));
-
     int boxes_per_side = 20;
     hittable_list boxes1{boxes_per_side*boxes_per_side};
-    //////// vector<hittable*> all_boxes3
-    for (int i = 0; i < boxes_per_side; i++) {
-        for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 100.0;
-            auto x0 = -1000.0 + i*w;
-            auto z0 = -1000.0 + j*w;
-            auto y0 = 0.0;
-            auto x1 = x0 + w;
-            auto y1 = random_float(1,101, nullptr);
-            auto z1 = z0 + w;
-
-            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
-            boxes1.add(static_cast<hittable *>(box3));
-        }
-    }
-
-    hittable_list world{7};
-
-    auto bvh_node_boxes1 = new bvh_node{boxes1};
-    world.add(bvh_node_boxes1);
-
-    auto light = new diffuse_light(color(7, 7, 7));
-    auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
-    world.add(quad_light_1);
-
-    auto dielectric_sphere = new dielectric(1.5);
-    auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
-    world.add(dielectric_sphere_1);
-
-    auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
-    auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
-    world.add(metal_sphere_1);
-
-    auto dielectric_ground = new dielectric(1.5);
-    auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
-    world.add(dielectric_ground_1);
-
-    auto image_ptr = new image_loader{"earthmap.jpg"};
-    auto image_texture_emat = new image_texture(image_ptr->get_record());
-    auto lambertian_emat = new lambertian(image_texture_emat);
-    auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
-    world.add(lambertian_emat_sphere_1);
-
-    int ns = 1000;
-    hittable_list boxes2{ns};
-    auto white = new lambertian(color(.73, .73, .73));
-    for (int j = 0; j < ns; j++) {
-        auto boxes2_sphere = new sphere(random_in_cube(0, 165, nullptr), 10, white);
-        boxes2.add(boxes2_sphere);
-    }
-
-    auto bvh_node_box = new bvh_node(boxes2);
-    auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
-    auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
-    world.add(bvh_node_box_translate);
-    return world;
-}
-
-__host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_record* image_rd) {
-    hittable_list boxes1{400};
-    auto ground = new lambertian(color(0.48, 0.83, 0.53));
-    hittable_list world{7};
-
-    int boxes_per_side = 20;
     for (int i = 0; i < boxes_per_side; i++) {
         for (int j = 0; j < boxes_per_side; j++) {
             auto w = 100.0f;
@@ -161,54 +98,55 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
             auto z0 = -1000.0f + j*w;
             auto y0 = 0.0f;
             auto x1 = x0 + w-0.1f;
-            // Get near-identical scene between CPU and CUDA
-            #ifdef __CUDA_ARCH__
-            auto y1 = random_float(1,101, rnd);
-            #else
+            // Get identical scene between runs
             auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
-            #endif
             auto z1 = z0 + w-0.1f;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
             boxes1.add(static_cast<hittable *>(box3));
         }
     }
-
-    auto image_texture_emat = new image_texture(image_rd[0]);
-    auto lambertian_emat = new lambertian(image_texture_emat);
-    auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
-    world.add(lambertian_emat_sphere_1);
     auto bvh_node_boxes1 = new bvh_node{boxes1};
     world.add(bvh_node_boxes1);
 
+    // 2nd
     auto light = new diffuse_light(color(7, 7, 7));
     auto quad_light_1 = new quad(point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light);
     world.add(quad_light_1);
 
+    // 3rd
     auto dielectric_sphere = new dielectric(1.5);
     auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
     world.add(dielectric_sphere_1);
 
+    //4th
     auto metal_sphere = new metal(color(0.8, 0.8, 0.9), 1.0);
     auto metal_sphere_1 = new sphere(point3(0, 150, 145), 50, metal_sphere);
     world.add(metal_sphere_1);
 
+    //5th
     auto dielectric_ground = new dielectric(1.5);
     auto dielectric_ground_1 = new sphere(point3(360, 150, 145), 70, dielectric_ground);
     world.add(dielectric_ground_1);
 
+    //6th
+    auto image_texture_emat = new image_texture(image_rd[0]);
+    auto lambertian_emat = new lambertian(image_texture_emat);
+    auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
+    world.add(lambertian_emat_sphere_1);
+
+    //7th
     int ns = 1000;
-    auto boxes2 = new hittable_list{ns};
+    auto boxes2 = hittable_list{ns};
     auto white = new lambertian(color(.73, .73, .73));
     for (int j = 0; j < ns; j++) {
-        auto boxes2_sphere = new sphere(random_in_cube(0, 165, rnd), 10, white);
-        boxes2->add(boxes2_sphere);
+        auto center = get_rand_vec3(j);
+        auto boxes2_sphere = new sphere(center, 10, white);
+        boxes2.add(boxes2_sphere);
     }
-
-    auto bvh_node_box = new bvh_node(*boxes2);
+    auto bvh_node_box = new bvh_node(boxes2);
     auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
     auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
-
     world.add(bvh_node_box_translate);
 
     hittable_list tree{1};
@@ -216,11 +154,11 @@ __host__ __device__ hittable_list debug_scene_build(curandState* rnd, image_reco
     return tree;
 }
 
-__global__ void debug_scene_build_cuda(bvh_node** world_ptr, curandState* states, image_record* image_rd) {
+__global__ void final_scene_build_cuda(bvh_node** world_ptr, curandState* states, image_record* image_rd) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
         auto temp = new hittable_list{1};
-        *temp = debug_scene_build(states,image_rd);
+        *temp = final_scene_build(states,image_rd);
         *world_ptr = static_cast<bvh_node *>(temp->get_objects()[0]);
     }
 }
@@ -392,19 +330,21 @@ int main(int argc, char* argv[]) {
     initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
     utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
 
-    auto cam = final_camera(400, 32, 4);
+    auto cam = final_camera(1600, 1024, 8);
     utils::CuArrayRAII camGpuPtr{&cam};
     if (argc!=1) {
-        auto scene = debug_scene_build(nullptr,&rec);
+        auto scene = final_scene_build(nullptr,&rec);
         render_scene(scene, cam);
     } else {
-        // auto scene = debug_scene_build(nullptr,&rec);
-        // //auto scene = final_scene_build();
-        // render_scene_realtime(scene, cam);
-        debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
-        cudaDeviceSynchronize();
-        utils::cu_check();
-        render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
+        if (false) {
+            auto scene = final_scene_build(nullptr,&rec);
+            render_scene_realtime(scene, cam);
+        } else {
+            final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
+            cudaDeviceSynchronize();
+            utils::cu_check();
+            render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
+        }
     }
     // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
     //cudaDeviceReset();
