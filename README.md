@@ -11,6 +11,11 @@ with minimal modifications to provide a baseline.
 Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 8.
 ![reference.png](reference.png)
 
+## TO-DO
+- Trim register usage: metal::scatter(): 84, dielectric::scatter(): 78, lambertian::scatter(): 54, 
+sphere::hit(): 70, quad::hit(): 67
+- Improve cache hit-rate
+
 ### Frame time
 
 Controlled test scene (same as the reference render above), 400x400 px, 32 samples per pixel, depth of ray is 4.
