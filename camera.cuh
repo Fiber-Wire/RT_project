@@ -152,7 +152,7 @@ class camera {
                                   + ((row_id + offset.y) * pixel_delta_v);
 
         const auto ray_origin = center;
-        const auto ray_direction = pixel_sample - ray_origin;
+        const auto ray_direction = normalize(pixel_sample - ray_origin);
 
         return ray(ray_origin, ray_direction);
     }
@@ -172,19 +172,18 @@ class camera {
             if (!world->hit(cur_ray, interval(0.001f, infinity), rec))
                 return cur_attenuation * background;
 
-            ray scattered;
+            vec3 scattered_direction;
             color attenuation;
 
             if (rec.mat->will_scatter) {
-                rec.mat->scatter(cur_ray, rec, attenuation, scattered, rnd);
+                rec.mat->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
             } else {
-                const auto recp = cur_ray.at(rec.t);
-                color color_from_emission = rec.mat->emitted(rec.u, rec.v, recp);
+                color color_from_emission = rec.mat->emitted(rec.u, rec.v);
                 return cur_attenuation * color_from_emission;
             }
 
             cur_attenuation *= attenuation;
-            cur_ray = scattered;
+            cur_ray = ray(cur_ray.at(rec.t), scattered_direction);
         }
         // If we've exceeded the ray bounce limit, no more light is gathered.
         return color(0,0,0);

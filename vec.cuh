@@ -24,13 +24,19 @@ __host__ __device__ inline vec3 unit_vector(const vec3& v) {
 
 __host__ __device__ inline glm::vec2 random_unit_vector2D(curandState* rnd) {
     const float azimuth = random_float(rnd) * 2 * pi;
-    return {sin(azimuth), cos(azimuth)};
+#ifdef __CUDA_ARCH__
+    glm::vec2 res;
+    __sincosf(azimuth, &res.x, &res.y);
+    return res;
+#else
+    return {std::sin(azimuth), std::cos(azimuth)};
+#endif
 }
 
 __host__ __device__ inline vec3 random_unit_vector(curandState* rnd) {
     float z = 2.0f*random_float(rnd) - 1.0f;
     // z is in the range [-1,1]
-    const auto planar = random_unit_vector2D(rnd) * std::sqrt(1.0f-z*z);
+    const auto planar = random_unit_vector2D(rnd) * sqrtf(1.0f-z*z);
     return {planar.x, planar.y, z};
 }
 
@@ -50,7 +56,11 @@ __host__ __device__ inline vec3 reflect(const vec3& v, const vec3& n) {
 }
 
 __host__ __device__ inline vec3 refract(const vec3& uv, const vec3& n, const float etai_over_etat) {
-    const auto cos_theta = fmin(dot(-uv, n), 1.0f);
+#ifdef __CUDA_ARCH__
+    const float cos_theta = __saturatef(dot(-uv, n));
+#else
+    const float cos_theta = min(dot(-uv, n), 1.0f);
+#endif
     const vec3 r_out_perp =  etai_over_etat * (uv + cos_theta*n);
     const vec3 r_out_parallel = -sqrtf(fabs(1.0f - glm::dot(r_out_perp,r_out_perp))) * n;
     return r_out_perp + r_out_parallel;

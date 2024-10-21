@@ -10,12 +10,12 @@ class material {
   public:
     __host__ __device__ virtual ~material() {}
 
-    __host__ __device__ virtual color emitted(float u, float v, const point3& p) const {
+    __host__ __device__ virtual color emitted(float u, float v) const {
         return color(0,0,0);
     }
 
     __host__ __device__ virtual void scatter(
-        const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd
+        const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd
     ) const {}
 
     bool will_scatter = false;
@@ -48,16 +48,15 @@ class lambertian final : public material {
         return *this;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
+    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
     const override {
         auto scatter_direction = rec.normal + random_unit_vector(rnd);
-        const auto recp = r_in.at(rec.t);
         // Catch degenerate scatter direction
         if (near_zero(scatter_direction))
             scatter_direction = rec.normal;
 
-        scattered = ray(recp, scatter_direction);
-        attenuation = tex->value(rec.u, rec.v, recp);
+        scattered_direction = normalize(scatter_direction);
+        attenuation = tex->value(rec.u, rec.v);
     }
 
   private:
@@ -72,15 +71,15 @@ class metal final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
+    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
     const override {
         vec3 reflected;
         attenuation = albedo;
         do {
             reflected = reflect(r_in.direction(), rec.normal);
-            reflected = unit_vector(reflected) + fuzz * random_unit_vector(rnd);
+            reflected = reflected + fuzz * random_unit_vector(rnd);
         } while (dot(reflected, rec.normal) <= 0);
-        scattered = ray(r_in.at(rec.t), unit_vector(reflected));
+        scattered_direction =  normalize(reflected);
     }
 
   private:
@@ -95,25 +94,25 @@ class dielectric final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
+    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
     const override {
-        const auto recp = r_in.at(rec.t);
         attenuation = color(1.0f, 1.0f, 1.0f);
         const float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
 
-        const vec3 unit_direction = unit_vector(r_in.direction());
+        const vec3 unit_direction = r_in.direction();
+        #ifdef __CUDA_ARCH__
+        const float cos_theta = __saturatef(dot(-unit_direction, rec.normal));
+        #else
         const float cos_theta = min(dot(-unit_direction, rec.normal), 1.0f);
-        const float sin_theta = std::sqrt(1.0f - cos_theta*cos_theta);
+        #endif
+        const float sin_theta = sqrtf(1.0f - cos_theta*cos_theta);
 
         const bool cannot_refract = ri * sin_theta > 1.0f;
-        vec3 direction;
 
         if (cannot_refract || reflectance(cos_theta, ri) > random_float(rnd))
-            direction = reflect(unit_direction, rec.normal);
+            scattered_direction = reflect(unit_direction, rec.normal);
         else
-            direction = refract(unit_direction, rec.normal, ri);
-
-        scattered = ray(recp, direction);
+            scattered_direction = refract(unit_direction, rec.normal, ri);
     }
 
   private:
@@ -138,8 +137,8 @@ class diffuse_light final : public material {
         tex = &color_tex;
     }
 
-    __host__ __device__ color emitted(const float u, const float v, const point3& p) const override {
-        return tex->value(u, v, p);
+    __host__ __device__ color emitted(const float u, const float v) const override {
+        return tex->value(u, v);
     }
     __host__ __device__ diffuse_light(const diffuse_light& other) {
         *this = other;
@@ -173,11 +172,10 @@ class isotropic final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
+    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
     const override {
-        const auto recp = r_in.at(rec.t);
-        scattered = ray(recp, random_unit_vector(rnd));
-        attenuation = tex->value(rec.u, rec.v, recp);
+        scattered_direction = random_unit_vector(rnd);
+        attenuation = tex->value(rec.u, rec.v);
     }
 
     __host__ __device__ isotropic(const isotropic& other) {
