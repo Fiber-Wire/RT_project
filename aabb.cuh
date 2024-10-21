@@ -33,7 +33,7 @@ class aabb {
         z = interval(box0.z, box1.z);
     }
 
-    __host__ __device__ const interval& axis_interval(int n) const {
+    __host__ __device__ const interval& axis_interval(const int n) const {
         if (n == 1) return y;
         if (n == 2) return z;
         return x;

@@ -22,7 +22,7 @@ class bvh_node final : public hittable {
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
         // list only extends until this constructor exits. That's OK, because we only need to
         // persist the resulting bounding volume hierarchy.
-        printf("build bvh with %i objs, depth %llu\n", list.count, depth);
+        printf("build bvh with %i objs, depth %i\n", list.count, depth);
     }
 
     __host__ __device__ bvh_node(std::span<hittable*> objects, const size_t start, const size_t end) {
@@ -150,11 +150,11 @@ class bvh_node final : public hittable {
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
-    size_t depth{};
     hittable* left{};
     hittable* right{};
-    bool child_bvh{false};
     aabb bbox;
+    int depth{};
+    bool child_bvh{false};
 
     __host__ __device__ static bool box_compare(
         const hittable* a, const hittable* b, const int axis_index

@@ -53,10 +53,10 @@ class sphere final : public hittable {
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
-    ray center;
     float radius;
-    material* mat;
+    ray center;
     aabb bbox;
+    material* mat;
 
     __host__ __device__ static void get_sphere_uv(const point3& p, float& u, float& v) {
         // p: a given point on the sphere of radius one, centered at the origin.
@@ -126,7 +126,7 @@ class quad final : public hittable {
         return true;
     }
 
-    __host__ __device__ static bool is_interior(float a, float b, hit_record& rec) {
+    __host__ __device__ static bool is_interior(const float a, const float b, hit_record& rec) {
         const auto unit_interval = interval(0, 1);
         // Given the hit point in plane coordinates, return false if it is outside the
         // primitive, otherwise set the hit record UV coordinates and return true.
@@ -144,9 +144,9 @@ class quad final : public hittable {
     vec3 u, v;
     vec3 w;
     material* mat;
-    aabb bbox;
     vec3 normal;
     float D;
+    aabb bbox;
 };
 
 /// Returns the 3D box (six sides) that contains the two opposite vertices a & b.

@@ -74,13 +74,13 @@ class metal final : public material {
 
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, ray& scattered, curandState* rnd)
     const override {
-        const auto recp = r_in.at(rec.t);
-        vec3 reflected = reflect(r_in.direction(), rec.normal);
-        do {
-            reflected = unit_vector(reflected) + (fuzz * random_unit_vector(rnd));
-        } while (dot(reflected, rec.normal) <= 0);
-        scattered = ray(recp, reflected);
+        vec3 reflected;
         attenuation = albedo;
+        do {
+            reflected = reflect(r_in.direction(), rec.normal);
+            reflected = unit_vector(reflected) + fuzz * random_unit_vector(rnd);
+        } while (dot(reflected, rec.normal) <= 0);
+        scattered = ray(r_in.at(rec.t), unit_vector(reflected));
     }
 
   private:

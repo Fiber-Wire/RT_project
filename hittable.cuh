@@ -44,9 +44,7 @@ class translate final : public hittable {
   public:
     __host__ __device__ translate(hittable *object, const vec3& offset)
       : object(object), offset(offset)
-    {
-        bbox = object->bounding_box() + offset;
-    }
+    {}
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         // Move the ray backwards by the offset
@@ -62,12 +60,11 @@ class translate final : public hittable {
         return true;
     }
 
-    __host__ __device__ aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override { return object->bounding_box() + offset; }
 
   private:
     hittable* object;
     vec3 offset;
-    aabb bbox;
 };
 
 

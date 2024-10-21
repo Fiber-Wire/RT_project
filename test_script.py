@@ -67,7 +67,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run a C++ program with arguments and capture output.")
 
     # Add the Python program's arguments
-    parser.add_argument('--cpp_program_path', type=str, default='.\\cmake-build-relwithdebinfo.\\RT_project.exe', dest='cpp_program_path', help="Cpp Program path (str)")
+    parser.add_argument('--cpp_program_path', type=str, default=r'./RT_project.exe', dest='cpp_program_path', help="Cpp Program path (str)")
     parser.add_argument('--csv_path', type=str, default='output_data.csv', dest='csv_path', help="Output file CSV path and name")
 
     parser.add_argument('--size', type=int, default=400, dest='size',help="Size parameter (int)")

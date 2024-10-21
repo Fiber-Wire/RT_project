@@ -108,8 +108,11 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
             auto x1 = x0 + w-0.1f;
             // Get identical scene between runs
             // compute-sanitizer does not like what we do here
-            //auto y1 = random_float(1,101, rnd);
+#ifdef __CUDA_ARCH__
+            auto y1 = random_float(1,101, rnd);
+#else
             auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
+#endif
             auto z1 = z0 + w-0.1f;
 
             auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground, quads);
@@ -150,8 +153,11 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
     auto white = material_handles[6];
     for (int j = 0; j < ns; j++) {
         // compute-sanitizer does not like what we do here
-        // auto center = random_in_cube(0,165, rnd);
+#ifdef __CUDA_ARCH__
+        auto center = random_in_cube(0,165, rnd);
+#else
         auto center = get_rand_vec3(j);
+#endif
         spheres->push({center, 10, white});
         boxes2.add(spheres->end());
     }
@@ -266,7 +272,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam, const int &max_fra
     size_t frames = 0;
     std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl() && frames < max_frame)
+    while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -306,7 +312,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
     size_t frames = 0;
     std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl() && frames < max_frame)
+    while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -349,7 +355,12 @@ void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth,
             frame = std::atoi(argv[i + 1]);
         } else {
             std::cerr << "Usage: " << argv[0]
-                  << " --size <int> --depth <int> --samples <int> --device <string>" << std::endl;
+                << " --size <int> --depth <int> --samples <int> --device <string>\n"
+                   "       --size: width of image in px\n"
+                   "       --depth: maximum depth for rays\n"
+                   "       --samples: number of samples per pixel\n"
+                   "       --device: device to use (cpu, gpu, default)\n"
+                   "       --frame: non-stop when set to negative\n" << std::endl;
         }
     }
 }
@@ -358,7 +369,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = 20;
+    int size = 400, samples = 32, depth = 4, frame = -1;
     std::string device = "gpu";
     parse_arguments(argc, argv, size, samples, depth, device, frame);
 
