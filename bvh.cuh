@@ -26,6 +26,11 @@ class bvh_node final : public hittable {
     }
 
     __host__ __device__ bvh_node(std::span<hittable*> objects, const size_t start, const size_t end) {
+        if(end - start <= 0) {
+            bbox = aabb::empty();
+            return;
+        }
+
         auto bvh_node_list = new bvh_node[glm::pow(2,glm::log2(end-start)+1)];
         bvh_node_construct_info info_stack[10];
         int stack_index = 0;

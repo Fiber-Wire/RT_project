@@ -10,7 +10,7 @@ def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_co
         start_time = time.time()
         command = [cpp_executable_path]  # Add the arguments to the command
         for args_key in args.keys():
-            command += [f'--{args_key} {args[args_key]}']
+            command += [f'--{args_key}',f'{args[args_key]}']
 
         args_df = pd.DataFrame({
             'size': [args['size']],
