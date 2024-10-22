@@ -94,7 +94,11 @@ class dielectric final : public material {
     __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
     const override {
         attenuation = color(1.0f, 1.0f, 1.0f);
+        #ifdef __CUDA_ARCH__
+        const float ri = rec.front_face ? __fdividef(1.0f,refraction_index) : refraction_index;
+        #else
         const float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
+        #endif
 
         const vec3 unit_direction = r_in.direction();
         #ifdef __CUDA_ARCH__
@@ -119,9 +123,16 @@ class dielectric final : public material {
 
     __host__ __device__ static float reflectance(const float cosine, const float refraction_index) {
         // Use Schlick's approximation for reflectance.
+        #ifdef __CUDA_ARCH__
+        auto r0 = __fdividef((1.0f - refraction_index) , (1.0f + refraction_index));
+        r0 = r0*r0;
+        return r0 + (1.0f-r0)*__powf((1.0f - cosine),5);
+        #else
         auto r0 = (1.0f - refraction_index) / (1.0f + refraction_index);
         r0 = r0*r0;
         return r0 + (1.0f-r0)*std::pow((1.0f - cosine),5);
+        #endif
+
     }
 };
 
