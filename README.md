@@ -12,8 +12,8 @@ Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 8.
 ![reference.png](reference.png)
 
 ## TO-DO
-- Trim register usage(ideally all <= 64): metal::scatter(): 70, dielectric::scatter(): 69, lambertian::scatter(): 54, 
-sphere::hit(): 70, quad::hit(): 67
+- Trim register usage(ideally all <= 64): metal::scatter(): 62, dielectric::scatter(): 69, lambertian::scatter(): 54, 
+sphere::hit(): 70, quad::hit(): 67 (numbers are for SM_89 only)
 - Improve cache hit-rate
 
 ### Frame time

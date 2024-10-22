@@ -75,8 +75,11 @@ class metal final : public material {
     const override {
         attenuation = albedo;
         do {
-            scattered_direction = normalize(reflect(r_in.direction(), rec.normal) + fuzz * random_unit_vector(rnd));
+            // direction is wrong
+            scattered_direction = fuzz*random_unit_vector(rnd)-r_in.direction();
         } while (dot(scattered_direction, rec.normal) <= 0);
+        // Flip it to the correct direction
+        scattered_direction = normalize(-scattered_direction+2*dot(rec.normal,scattered_direction)*rec.normal);
     }
 
   private:
