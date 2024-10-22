@@ -12,8 +12,8 @@ Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 8.
 ![reference.png](reference.png)
 
 ## TO-DO
-- Trim register usage(ideally all <= 64): metal::scatter(): 62, dielectric::scatter(): 69, lambertian::scatter(): 54, 
-sphere::hit(): 70, quad::hit(): 67 (numbers are for SM_89 only)
+- ~~Trim register usage(ideally all <= 64): metal::scatter(): 62, dielectric::scatter(): 69, lambertian::scatter(): 54, 
+sphere::hit(): 70, quad::hit(): 67 (numbers are for SM_89 only)~~ Mostly done by `--use_fast_math`
 - Improve cache hit-rate
 
 ### Frame time
@@ -21,7 +21,7 @@ sphere::hit(): 70, quad::hit(): 67 (numbers are for SM_89 only)
 Controlled test scene (same as the reference render above), 400x400 px, 32 samples per pixel, depth of ray is 4.
 
 - AMD Ryzen 9 7940HS 8c16t: \~432.2 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~80.4 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~64.3 ms.
 
 ## How-to
 
