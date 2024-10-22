@@ -274,7 +274,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam, const int &max_fra
     auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
-        if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
+        if (mainRendererComm.frame_rendered.try_acquire()) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
             SDL_RenderClear(renderer.get());
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
@@ -286,6 +286,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam, const int &max_fra
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
         }
+        std::this_thread::yield();
     }
     utils::log("Total frames: "+std::to_string(frames)+
                ", avg. frame time: "+std::to_string(frame_times.count()/frames/1e3)+" ms.");
@@ -314,7 +315,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
     auto t0 = std::chrono::steady_clock::now();
     while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
-        if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
+        if (mainRendererComm.frame_rendered.try_acquire()) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
             SDL_RenderClear(renderer.get());
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
@@ -326,6 +327,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
         }
+        std::this_thread::yield();
     }
     utils::log("Total frames: "+std::to_string(frames)+
            ", avg. frame time: "+std::to_string(frame_times.count()/frames/1e3)+" ms.");

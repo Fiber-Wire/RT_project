@@ -12,7 +12,7 @@ Reference render: 1600x1600 px, 1024 samples per pixel, depth of ray is 8.
 ![reference.png](reference.png)
 
 ## TO-DO
-- Trim register usage: metal::scatter(): 84, dielectric::scatter(): 78, lambertian::scatter(): 54, 
+- Trim register usage(ideally all <= 64): metal::scatter(): 70, dielectric::scatter(): 69, lambertian::scatter(): 54, 
 sphere::hit(): 70, quad::hit(): 67
 - Improve cache hit-rate
 
@@ -21,7 +21,7 @@ sphere::hit(): 70, quad::hit(): 67
 Controlled test scene (same as the reference render above), 400x400 px, 32 samples per pixel, depth of ray is 4.
 
 - AMD Ryzen 9 7940HS 8c16t: \~432.2 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~103.2 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~80.4 ms.
 
 ## How-to
 
