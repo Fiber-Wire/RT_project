@@ -31,7 +31,7 @@ class sphere final : public hittable {
         if (discriminant < 0)
             return false;
 
-        const auto sqrtd = std::sqrt(discriminant);
+        const auto sqrtd = sqrtf(discriminant);
 
         // Find the nearest root that lies in the acceptable range.
         auto root = (h - sqrtd) / a;
