@@ -13,16 +13,12 @@ class sphere final : public hittable {
     __host__ __device__ sphere(): radius(0), mat(nullptr) {}
 
     // Stationary Sphere
-    __host__ __device__ sphere(const point3& static_center, const float radius, material* mat)
-      : center(static_center, vec3(0,0,0)), radius(max(0.0f,radius)), mat(mat)
-    {
-        const auto rvec = vec3(radius, radius, radius);
-        bbox = aabb(static_center - rvec, static_center + rvec);
-    }
+    __host__ __device__ sphere(const point3& center, const float radius, material* mat)
+      : center(center), radius(max(0.0f,radius)), mat(mat)
+    {}
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
-        const point3 current_center = center.origin();
-        const vec3 oc = current_center - r.origin();
+        const vec3 oc = center - r.origin();
         const auto a = glm::dot(r.direction(), r.direction());
         const auto h = dot(r.direction(), oc);
         const auto c = glm::dot(oc, oc) - radius*radius;
@@ -42,7 +38,7 @@ class sphere final : public hittable {
         }
 
         rec.t = root;
-        const vec3 outward_normal = (r.at(rec.t) - current_center) / radius;
+        const vec3 outward_normal = (r.at(rec.t) - center) / radius;
         rec.set_face_normal(r, outward_normal);
         get_sphere_uv(outward_normal, rec.u, rec.v);
         rec.mat = mat;
@@ -50,12 +46,14 @@ class sphere final : public hittable {
         return true;
     }
 
-    __host__ __device__ aabb bounding_box() const override { return bbox; }
+    __host__ __device__ aabb bounding_box() const override {
+        const auto rvec = vec3(radius, radius, radius);
+        return {center - rvec, center + rvec};
+    }
 
   private:
     float radius;
-    ray center;
-    aabb bbox;
+    vec3 center{};
     material* mat;
 
     __host__ __device__ static void get_sphere_uv(const point3& p, float& u, float& v) {
@@ -75,27 +73,23 @@ class sphere final : public hittable {
 };
 class quad final : public hittable {
   public:
-    __host__ __device__ quad(): Q(), u(), v(), w(), mat(nullptr), normal(), D(0) {}
+    __host__ __device__ quad(): Q(), u(), v(), mat(nullptr), normal(), D(0) {}
 
     __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
       : Q(Q), u(u), v(v), mat(mat)
     {
         auto n = cross(u, v);
-        normal = unit_vector(n);
+        inv_len_n = 1.0f / length(n);
+        normal = n*inv_len_n;
         D = dot(normal, Q);
-        w = n / dot(n,n);
-
-        set_bounding_box();
+        //w = normal*inv_len_n;
     }
 
-    __host__ __device__ void set_bounding_box() {
-        // Compute the bounding box of all four vertices.
+    __host__ __device__ aabb bounding_box() const override {
         const auto bbox_diagonal1 = aabb(Q, Q + u + v);
         const auto bbox_diagonal2 = aabb(Q + u, Q + v);
-        bbox = aabb(bbox_diagonal1, bbox_diagonal2);
+        return {bbox_diagonal1, bbox_diagonal2};
     }
-
-    __host__ __device__ aabb bounding_box() const override { return bbox; }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         const auto denom = dot(normal, r.direction());
@@ -112,8 +106,8 @@ class quad final : public hittable {
         // Determine if the hit point lies within the planar shape using its plane coordinates.
         const auto intersection = r.at(t);
         const vec3 planar_hitpt_vector = intersection - Q;
-        const auto alpha = dot(w, cross(planar_hitpt_vector, v));
-        const auto beta = dot(w, cross(u, planar_hitpt_vector));
+        const auto alpha = dot(normal, cross(planar_hitpt_vector, v))*inv_len_n;
+        const auto beta = dot(normal, cross(u, planar_hitpt_vector))*inv_len_n;
 
         if (!is_interior(alpha, beta, rec))
             return false;
@@ -142,11 +136,11 @@ class quad final : public hittable {
   private:
     point3 Q;
     vec3 u, v;
-    vec3 w;
+    //vec3 w;
+    float inv_len_n;
     material* mat;
     vec3 normal;
     float D;
-    aabb bbox;
 };
 
 /// Returns the 3D box (six sides) that contains the two opposite vertices a & b.

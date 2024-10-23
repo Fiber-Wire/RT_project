@@ -244,6 +244,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
     const int width  = cam.image_width;
     unsigned int* imageGpuPtr{};
     cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
+    //utils::cu_ensure(cudaFuncSetCacheConfig(camera_render_cuda, cudaFuncCachePreferL1));
     const std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
