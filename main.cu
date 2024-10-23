@@ -208,6 +208,10 @@ void render_scene(const hittable_list &scene, camera &cam) {
 void render_thread(camera &cam, const hittable_list &scene, const std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
+            const auto r = cam.lookfrom-cam.lookat;
+            const auto tan_v = -normalize(cross(r, cam.vup));
+            constexpr auto dtheta = 0.01f;
+            cam.lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
             cam.render_parallel(scene, image);
             mainRendererComm.frame_rendered.release();
         }
