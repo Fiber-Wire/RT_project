@@ -384,7 +384,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = -1;
+    int size = 400, samples = 32, depth = 4, frame = 628;
     std::string device = "gpu";
     parse_arguments(argc, argv, size, samples, depth, device, frame);
 

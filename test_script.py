@@ -75,7 +75,7 @@ def main():
     parser.add_argument('--samples', type=int, default=32, dest='samples', help="Samples parameter (int)")
     parser.add_argument('--depth', type=int, default=4, dest='depth', help="Depth parameter (int)")
     parser.add_argument('--device', type=str, default='gpu', dest='device', help="Device parameter (str)")
-    parser.add_argument('--frame', type=int, default=5, dest='frame', help="Frame parameter (int)")
+    parser.add_argument('--frame', type=int, default=628, dest='frame', help="Frame parameter (int)")
 
     args = parser.parse_args()
 
