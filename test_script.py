@@ -16,7 +16,8 @@ def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_co
             'size': [args['size']],
             'samples': [args['samples']],
             'depth': [args['depth']],
-            'device': [args['device']]
+            'device': [args['device']],
+            'frame': [args['frame']]
         })
 
         final_df = pd.DataFrame()

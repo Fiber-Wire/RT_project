@@ -215,18 +215,28 @@ void render_thread(camera &cam, const hittable_list &scene, const std::span<unsi
     }
 }
 
+__global__ void camera_init_cuda(camera* cam) {
+    const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        cam->initialize();
+        const auto r = cam->lookfrom-cam->lookat;
+        const auto tan_v = -normalize(cross(r, cam->vup));
+        constexpr auto dtheta = 0.01f;
+        cam->lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
+    }
+}
+
 __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
     static_assert(threadPerPixel<=BLOCKDIM_X);
-    if (tid==0) {
-        cam->initialize();
-    }
+
     auto devState = devStates[tid];
     const auto gridSize = blockDim.x * gridDim.x;
     const auto width = cam->image_width;
     const auto scene = *scenepptr;
+
     for (unsigned int pixelId = tid/threadPerPixel; pixelId < image.size(); pixelId+=gridSize/threadPerPixel) {
         const auto pixel_result = cam->render_pixel<threadPerPixel>(
             scene,
@@ -236,6 +246,7 @@ __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<
             image[pixelId] = pixel_result;
         }
     }
+
     devStates[tid] = devState;
 }
 
@@ -248,6 +259,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
     const std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
+            camera_init_cuda<<<1,1>>>(cam_cuda);
             camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
             utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
