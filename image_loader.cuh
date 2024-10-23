@@ -40,7 +40,10 @@ class image_loader {
 
     ~image_loader() {
         delete[] bdata;
-        cudaFree(bdata_cuda);
+        if (bdata_cuda != nullptr) {
+            cudaFree(bdata_cuda);
+            bdata_cuda = nullptr;
+        }
     }
 
     bool load(const std::string& filename) {

@@ -374,7 +374,7 @@ void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth,
             frame = std::atoi(argv[i + 1]);
         } else {
             std::cerr << "Usage: " << argv[0]
-                << " --size <int> --depth <int> --samples <int> --device <string>\n"
+                << " --size <int> --depth <int> --samples <int> --device <string>\n\n"
                    "       --size: width of image in px\n"
                    "       --depth: maximum depth for rays\n"
                    "       --samples: number of samples per pixel\n"
@@ -393,17 +393,9 @@ int main(int argc, char* argv[]) {
     parse_arguments(argc, argv, size, samples, depth, device, frame);
 
     auto image_ld = image_loader("earthmap.jpg");
-    auto rec_cuda = image_ld.get_record_cuda();
     const auto rec = image_ld.get_record();
-    const utils::CuArrayRAII image_rd{&rec_cuda};
-
-    const utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
-    // Cherry-picked seed
-    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
-    const utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
-
     auto cam = final_camera(size, samples, depth);
-    const utils::CuArrayRAII camGpuPtr{&cam};
+
     if (device == "default") {
         const auto scene = final_scene_build(nullptr,&rec);
         render_scene(scene, cam);
@@ -412,6 +404,13 @@ int main(int argc, char* argv[]) {
             auto scene = final_scene_build(nullptr,&rec);
             render_scene_realtime(scene, cam, frame);
         } else {
+            auto rec_cuda = image_ld.get_record_cuda();
+            const utils::CuArrayRAII image_rd{&rec_cuda};
+            const utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
+            // Cherry-picked seed
+            initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
+            const utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
+            const utils::CuArrayRAII camGpuPtr{&cam};
             final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
             cudaDeviceSynchronize();
             utils::cu_check();
