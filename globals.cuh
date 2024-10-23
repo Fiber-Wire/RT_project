@@ -6,7 +6,7 @@
 #define GLOBALS_CUH
 /// Macros
 #define BLOCKDIM_X 64
-#define GRIDDIM_X (400*400/BLOCKDIM_X)
+inline int GRIDDIM_X=400*400/(BLOCKDIM_X/32);
 #include "material.cuh"
 
 /// Synchronization between main and render thread

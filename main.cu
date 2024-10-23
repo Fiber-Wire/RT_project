@@ -391,6 +391,7 @@ int main(int argc, char* argv[]) {
     int size = 400, samples = 32, depth = 4, frame = 62;
     std::string device = "gpu";
     parse_arguments(argc, argv, size, samples, depth, device, frame);
+    GRIDDIM_X = size*size/(BLOCKDIM_X/32);
 
     auto image_ld = image_loader("earthmap.jpg");
     const auto rec = image_ld.get_record();
@@ -406,7 +407,7 @@ int main(int argc, char* argv[]) {
         } else {
             auto rec_cuda = image_ld.get_record_cuda();
             const utils::CuArrayRAII image_rd{&rec_cuda};
-            const utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
+            const utils::CuArrayRAII<curandState> devStates{nullptr, static_cast<size_t>(GRIDDIM_X*BLOCKDIM_X)};
             // Cherry-picked seed
             initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
             const utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
