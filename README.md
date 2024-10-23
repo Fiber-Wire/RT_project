@@ -19,9 +19,10 @@ sphere::hit(): 70, quad::hit(): 67 (numbers are for SM_89 only)~~ Mostly done by
 ### Frame time
 
 Controlled test scene (same as the reference render above), 400x400 px, 32 samples per pixel, depth of ray is 4.
+Camera spins at 0.1rad/frame for a total of 62 frames.
 
-- AMD Ryzen 9 7940HS 8c16t: \~432.2 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~64.3 ms.
+- AMD Ryzen 9 7940HS 8c16t: \~456.5 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~49.9 ms.
 
 ## How-to
 

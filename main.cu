@@ -210,7 +210,7 @@ void render_thread(camera &cam, const hittable_list &scene, const std::span<unsi
         if (mainRendererComm.frame_start_render.try_acquire()) {
             const auto r = cam.lookfrom-cam.lookat;
             const auto tan_v = -normalize(cross(r, cam.vup));
-            constexpr auto dtheta = 0.01f;
+            constexpr auto dtheta = 0.1f;
             cam.lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
             cam.render_parallel(scene, image);
             mainRendererComm.frame_rendered.release();
@@ -225,7 +225,7 @@ __global__ void camera_init_cuda(camera* cam) {
         cam->initialize();
         const auto r = cam->lookfrom-cam->lookat;
         const auto tan_v = -normalize(cross(r, cam->vup));
-        constexpr auto dtheta = 0.01f;
+        constexpr auto dtheta = 0.1f;
         cam->lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
     }
 }
@@ -388,7 +388,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = 628;
+    int size = 400, samples = 32, depth = 4, frame = 62;
     std::string device = "gpu";
     parse_arguments(argc, argv, size, samples, depth, device, frame);
 
