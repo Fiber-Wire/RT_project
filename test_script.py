@@ -3,9 +3,10 @@ import pandas as pd
 import re
 
 import time
+from datetime import datetime
 import argparse
 
-def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_count:int = 2):
+def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, date_time:str, record_count:int = 1):
     try:
         start_time = time.time()
         command = [cpp_executable_path]  # Add the arguments to the command
@@ -13,11 +14,13 @@ def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_co
             command += [f'--{args_key}',f'{args[args_key]}']
 
         args_df = pd.DataFrame({
-            'size': [args['size']],
-            'samples': [args['samples']],
-            'depth': [args['depth']],
-            'device': [args['device']],
-            'frame': [args['frame']]
+            'datetime': [date_time]*args['frame'],
+            'size': [args['size']]*args['frame'],
+            'samples': [args['samples']]*args['frame'],
+            'depth': [args['depth']]*args['frame'],
+            'device': [args['device']]*args['frame'],
+            'frame': [args['frame']]*args['frame'],
+            'frame_index':list(range(args['frame']))
         })
 
         final_df = pd.DataFrame()
@@ -36,23 +39,12 @@ def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_co
                 if match:
                     frame_times.append(float(match.group(1)))
 
-            frame_times.pop(0)
-            n = len(frame_times)
-            mean = sum(frame_times) / n
-            variance = sum([(x - mean) ** 2 for x in frame_times]) / n
-            result_df = pd.DataFrame({
-                'mean': [mean],
-                'variance': [variance]
-            })
-            #Add a tap after a single set of data
-            frame_times.append('')
-
             df = pd.DataFrame(frame_times, columns=["frame_time"])
-            combined_df = pd.concat([args_df, df,result_df], axis=1)
+            combined_df = pd.concat([args_df, df], axis=1)
             final_df = pd.concat([final_df, combined_df],axis = 0)
 
             # Write the final DataFrame to a CSV file
-        final_df.to_csv('output_data.csv', index=False, header=True)
+        final_df.to_csv(output_csv, index=False, header=True)
         end_time = time.time()
         elapsed_time = end_time - start_time
 
@@ -63,19 +55,21 @@ def execute_cpp_program(cpp_executable_path:str, args, output_csv:str, record_co
         print(f"An error occurred: {e}")
 
 def main():
-    record_count = 2
+    record_count = 1
+    date_time= datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
+    csv_default_name = date_time.replace(':',"-",2)
 
     parser = argparse.ArgumentParser(description="Run a C++ program with arguments and capture output.")
 
     # Add the Python program's arguments
     parser.add_argument('--cpp_program_path', type=str, default=r'./RT_project.exe', dest='cpp_program_path', help="Cpp Program path (str)")
-    parser.add_argument('--csv_path', type=str, default='output_data.csv', dest='csv_path', help="Output file CSV path and name")
+    parser.add_argument('--csv_path', type=str, default=f'{csv_default_name}.csv', dest='csv_path', help="Output file CSV path and name")
 
     parser.add_argument('--size', type=int, default=400, dest='size',help="Size parameter (int)")
     parser.add_argument('--samples', type=int, default=32, dest='samples', help="Samples parameter (int)")
     parser.add_argument('--depth', type=int, default=4, dest='depth', help="Depth parameter (int)")
     parser.add_argument('--device', type=str, default='gpu', dest='device', help="Device parameter (str)")
-    parser.add_argument('--frame', type=int, default=628, dest='frame', help="Frame parameter (int)")
+    parser.add_argument('--frame', type=int, default=62, dest='frame', help="Frame parameter (int)")
 
     args = parser.parse_args()
 
@@ -84,7 +78,11 @@ def main():
 
     args_list = {'size':args.size,'samples':args.samples,'depth':args.depth,'device':args.device, 'frame':args.frame}
 
-    execute_cpp_program(cpp_program, args_list, output_csv_file, record_count)
+    execute_cpp_program(cpp_program, args_list, output_csv_file, date_time, record_count)
 
 if __name__ == '__main__':
     main()
+
+
+
+
