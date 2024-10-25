@@ -68,10 +68,12 @@ void cornell_box() {
     cam.lookat   = point3(278, 278, 0);
     cam.vup      = vec3(0,1,0);
 
-    cam.render(world);
+    const auto world_bvh = bvh_node(world);
+
+    cam.render(world_bvh);
 }
 
-__host__ __device__ hittable_list final_scene_build(curandState* rnd, const image_record* image_rd) {
+__host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_record* image_rd) {
     hittable_list world{8};
 
     // Geometry primitives
@@ -171,17 +173,14 @@ __host__ __device__ hittable_list final_scene_build(curandState* rnd, const imag
     spheres->push({point3(240, 320, 400), 60, metal_2});
     world.add(spheres->end());
 
-    hittable_list tree{1};
-    tree.add(new bvh_node{world});
+    auto tree = new bvh_node{world};
     return tree;
 }
 
-__global__ void final_scene_build_cuda(bvh_node** world_ptr, curandState* states, image_record* image_rd) {
+__global__ void final_scene_build_cuda(bvh_node** world_ptr, curandState* states, const image_record* image_rd) {
     const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        const auto temp = new hittable_list{1};
-        *temp = final_scene_build(states,image_rd);
-        *world_ptr = static_cast<bvh_node *>(temp->get_objects()[0]);
+        *world_ptr = final_scene_build(states,image_rd);
     }
 }
 
@@ -201,11 +200,11 @@ __host__ __device__ camera final_camera(const int image_width, const int samples
     return cam;
 }
 
-void render_scene(const hittable_list &scene, camera &cam) {
+void render_scene(const bvh_node &scene, camera &cam) {
     cam.render(scene);
 }
 
-void render_thread(camera &cam, const hittable_list &scene, const std::span<unsigned int> image) {
+void render_thread(camera &cam, const bvh_node &scene, const std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             const auto r = cam.lookfrom-cam.lookat;
@@ -273,7 +272,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
     cudaFree(imageGpuPtr);
 }
 
-void render_scene_realtime(hittable_list &scene, camera &cam, const int &max_frame) {
+void render_scene_realtime(bvh_node &scene, camera &cam, const int &max_frame) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -399,11 +398,11 @@ int main(int argc, char* argv[]) {
 
     if (device == "default") {
         const auto scene = final_scene_build(nullptr,&rec);
-        render_scene(scene, cam);
+        render_scene(*scene, cam);
     } else {
         if (device == "cpu") {
             auto scene = final_scene_build(nullptr,&rec);
-            render_scene_realtime(scene, cam, frame);
+            render_scene_realtime(*scene, cam, frame);
         } else {
             auto rec_cuda = image_ld.get_record_cuda();
             const utils::CuArrayRAII image_rd{&rec_cuda};

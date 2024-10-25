@@ -22,7 +22,7 @@ Controlled test scene (same as the reference render above), 400x400 px, 32 sampl
 Camera spins at 0.1rad/frame for a total of 62 frames.
 
 - AMD Ryzen 9 7940HS 8c16t: \~456.5 ms.
-- NVIDIA GeForce RTX 4060 Laptop GPU: \~49.9 ms.
+- NVIDIA GeForce RTX 4060 Laptop GPU: \~38.9 ms.
 
 ## How-to
 

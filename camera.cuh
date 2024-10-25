@@ -22,7 +22,7 @@ class camera {
 
     float focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
-    void render(const hittable& world) {
+    void render(const bvh_node& world) {
         initialize();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
@@ -42,7 +42,7 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const hittable* world, int row_id, int col_id, curandState *rnd) const {
+    __host__ __device__ unsigned int render_pixel(const bvh_node* world, int row_id, int col_id, curandState *rnd) const {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(col_id, row_id, rnd);
@@ -68,7 +68,7 @@ class camera {
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
-    void render(const hittable& world, std::span<unsigned int> image) {
+    void render(const bvh_node& world, std::span<unsigned int> image) {
         initialize();
 
         for (int j = 0; j < image_height; j++) {
@@ -80,7 +80,7 @@ class camera {
         }
     }
 
-    void render_parallel(const hittable& world, std::span<unsigned int> image) {
+    void render_parallel(const bvh_node& world, std::span<unsigned int> image) {
         initialize();
         int num_threads = std::thread::hardware_concurrency();
         std::vector<std::thread> threads{};
@@ -162,7 +162,7 @@ class camera {
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
-    __host__ __device__ color ray_color(const ray& r, int depth, const hittable* world, curandState* rnd) const {
+    __host__ __device__ color ray_color(const ray& r, int depth, const bvh_node* world, curandState* rnd) const {
         ray cur_ray = r;
         auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
         for(int i = 0; i < depth; i++) {
