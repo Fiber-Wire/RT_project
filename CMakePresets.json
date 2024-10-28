@@ -1,0 +1,33 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-debug",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },{
+      "name": "release",
+      "displayName": "Release Build",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-release",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },{
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/cmake-build-relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ]
+}

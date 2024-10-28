@@ -1,0 +1,17 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "dev-build",
+      "inherits": "relwithdebinfo",
+      "environment": {
+      }
+    },
+    {
+      "name": "dbg-build",
+      "inherits": "debug",
+      "environment": {
+      }
+    }
+  ]
+}

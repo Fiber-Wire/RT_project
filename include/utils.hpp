@@ -198,11 +198,11 @@ namespace utils {
     }
     template <int threads_per_work=1>
     __host__ __device__ unsigned int tId_to_warp_mask(const unsigned int tid) {
-        unsigned int laneId = tid & 0x1f;
+        const unsigned int laneId = tid & 0x1f;
         // 0...0        1...1       0...0
         // left threads_per_work    right
-        unsigned int right_bits = tId_to_workId<threads_per_work>(laneId)*threads_per_work;
-        unsigned int left_bits = 32-(right_bits+threads_per_work);
+        const unsigned int right_bits = tId_to_workId<threads_per_work>(laneId)*threads_per_work;
+        const unsigned int left_bits = 32-(right_bits+threads_per_work);
         return (0xffffffff>>right_bits<<right_bits) & (0xffffffff<<left_bits>>left_bits);
     }
 #endif
