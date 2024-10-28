@@ -85,7 +85,7 @@ namespace utils {
                     //std::format("{} CUDA API error: {}", prompt.value(), cudaGetErrorString(result)) :
                     //std::format("CUDA API error: {}", cudaGetErrorString(result));
                     std::string{prompt.value()} + "CUDA API error: " + cudaGetErrorString(result) :
-                    std::string{"CUDA API error: {}"} + cudaGetErrorString(result);
+                    std::string{"CUDA API error: "} + cudaGetErrorString(result);
             cudaDeviceReset();
             log_and_pause<LogLevel::eErr>(prompt_str, 1000, location);
             std::abort();
