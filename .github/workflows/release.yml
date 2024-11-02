@@ -1,0 +1,53 @@
+name: Release Windows Binary on New Commit
+on:
+  push:
+    branches:
+      - cuda
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: Jimver/cuda-toolkit@v0.2.18
+        id: cuda-toolkit
+        with:
+          cuda: '12.5.1'
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: lukka/get-cmake@latest
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build binary
+        run: |
+          cd vcpkg
+          .\bootstrap-vcpkg.bat -disableMetrics
+          cd ..
+          cmake --preset=release
+          cmake --build .\cmake-build-release --target RT_project -j 2
+
+      - name: Set up Git
+        run: |
+          git config --global user.email "${{secrets.EMAIL}}"
+          git config --global user.name "${{secrets.NAME}}"
+
+      - name: Publish binary to public repository
+        run: |
+          git clone https://github.com/Fiber-Wire/RT_release.git
+          cd RT_release
+          xcopy /y ..\cmake-build-release\RT_project.exe .\
+          git add RT_project.exe
+          xcopy /y /e /i ..\cmake-build-release\images .\images
+          git add images/\*
+          xcopy /y ..\cmake-build-release\SDL2.dll .\
+          git add SDL2.dll
+          xcopy /y "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\cudart64_12.dll" .\
+          xcopy /y "${{steps.cuda-toolkit.outputs.CUDA_PATH}}\bin\curand64_10.dll" .\
+          git add cudart64_12.dll curand64_10.dll
+          xcopy /y ..\README.md .\
+          xcopy /y ..\reference.png .\
+          git add README.md reference.png
+          git commit -m "${{github.event.head_commit.message}} @ ${{ github.sha }}"
+          git push https://${{ secrets.PAT }}@github.com/Fiber-Wire/RT_release.git HEAD:main
