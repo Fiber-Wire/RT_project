@@ -6,17 +6,12 @@
 #include "hittable_list.cuh"
 
 #include <algorithm>
-class bvh_node;
-
-struct bvh_node_construct_info {
-    bvh_node* node;
-    size_t start;
-    size_t end;
-};
 
 class bvh_node final : public hittable {
   public:
-    __host__ __device__ bvh_node(): bbox(aabb::empty()) {}
+    __host__ __device__ bvh_node(): bbox(aabb::empty()) {
+        type = hit_type::eBVH;
+    }
     __host__ __device__ explicit bvh_node(hittable_list list) : bvh_node(list.get_objects(), 0, list.count) {
         // There's a C++ subtlety here. This constructor (without span indices) creates an
         // implicit copy of the hittable list, which we will modify. The lifetime of the copied
@@ -26,6 +21,7 @@ class bvh_node final : public hittable {
     }
 
     __host__ __device__ bvh_node(std::span<hittable*> objects, const size_t start, const size_t end) {
+        type = hit_type::eBVH;
         if(end - start <= 0) {
             bbox = aabb::empty();
             return;
@@ -101,6 +97,7 @@ class bvh_node final : public hittable {
 
     __host__ __device__ bvh_node& operator=(const bvh_node& other) {
         if (this != &other) {
+            type = other.type;
             bbox = other.bbox;
             left = other.left;
             right = other.right;
@@ -150,6 +147,11 @@ class bvh_node final : public hittable {
     __host__ __device__ aabb bounding_box() const override { return bbox; }
 
   private:
+    struct bvh_node_construct_info {
+        bvh_node* node;
+        size_t start;
+        size_t end;
+    };
     hittable* left{};
     hittable* right{};
     aabb bbox;

@@ -24,6 +24,7 @@ set ( SOURCE_RT_PROJECT
         vec.cuh
         ray.cuh
 )
+find_package(CUDAToolkit COMPONENTS curand REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(glm CONFIG REQUIRED)
@@ -39,6 +40,7 @@ set_property(TARGET RT_project PROPERTY CUDA_ARCHITECTURES "75;89")
 endif()
 # Why can this option affect performance?
 set_target_properties(RT_project PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+target_link_libraries(RT_project PRIVATE CUDA::curand)
 target_link_libraries(RT_project PRIVATE glm::glm)
 target_link_libraries(RT_project PRIVATE commons_headers)
 target_link_libraries(commons_headers

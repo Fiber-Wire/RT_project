@@ -14,6 +14,7 @@ class hittable_list final : public hittable {
 
     __host__ __device__ explicit hittable_list(const int capacity) : capacity(capacity) {
         objects = new hittable*[capacity];
+        type = hit_type::eList;
     }
 
     __host__ __device__ explicit hittable_list(hittable* object): hittable_list(1) { add(object); }
@@ -22,6 +23,7 @@ class hittable_list final : public hittable {
     }
     __host__ __device__ hittable_list& operator=(const hittable_list& other) {
         if (this != &other) {
+            type = other.type;
             capacity = other.capacity;
             delete[] objects;
             objects = new hittable*[capacity];

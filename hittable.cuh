@@ -29,9 +29,19 @@ class hit_record {
     }
 };
 
+enum class hit_type {
+    eUndefined,
+    eBVH,
+    eSphere,
+    eQuad,
+    eTranslate,
+    eRotate_y,
+    eList
+};
 
 class hittable {
   public:
+    hit_type type{hit_type::eUndefined};
     __host__ __device__ virtual ~hittable() {}
 
     __host__ __device__ virtual bool hit(const ray& r, const interval ray_t, hit_record& rec) const = 0;
@@ -42,9 +52,14 @@ class hittable {
 
 class translate final : public hittable {
   public:
+    __host__ __device__ translate(): object(nullptr), offset(0) {
+        type=hit_type::eTranslate;
+    }
+
     __host__ __device__ translate(hittable *object, const vec3& offset)
-      : object(object), offset(offset)
-    {}
+      : object(object), offset(offset) {
+        type=hit_type::eTranslate;
+    }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         // Move the ray backwards by the offset
@@ -70,7 +85,11 @@ class translate final : public hittable {
 
 class rotate_y final : public hittable {
   public:
+    __host__ __device__ rotate_y(): object(nullptr), sin_theta(0), cos_theta(0) {
+        type = hit_type::eRotate_y;
+    }
     __host__ __device__ rotate_y(hittable* object, const float angle) : object(object) {
+        type = hit_type::eRotate_y;
         const auto radians = degrees_to_radians(angle);
         sin_theta = std::sin(radians);
         cos_theta = std::cos(radians);

@@ -10,12 +10,15 @@
 
 class sphere final : public hittable {
   public:
-    __host__ __device__ sphere(): radius(0), mat(nullptr) {}
+    __host__ __device__ sphere(): radius(0), mat(nullptr) {
+        type = hit_type::eSphere;
+    }
 
     // Stationary Sphere
     __host__ __device__ sphere(const point3& center, const float radius, material* mat)
-      : center(center), radius(max(0.0f,radius)), mat(mat)
-    {}
+      : radius(max(0.0f,radius)), center(center), mat(mat) {
+        type = hit_type::eSphere;
+    }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
         const vec3 oc = center - r.origin();
@@ -73,11 +76,14 @@ class sphere final : public hittable {
 };
 class quad final : public hittable {
   public:
-    __host__ __device__ quad(): Q(), u(), v(), mat(nullptr), normal(), D(0) {}
+    __host__ __device__ quad(): Q(), u(), v(), inv_len_n(0), mat(nullptr), normal(), D(0) {
+        type = hit_type::eQuad;
+    }
 
     __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
       : Q(Q), u(u), v(v), mat(mat)
     {
+        type = hit_type::eQuad;
         auto n = cross(u, v);
         inv_len_n = 1.0f / length(n);
         normal = n*inv_len_n;
