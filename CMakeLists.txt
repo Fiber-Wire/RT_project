@@ -1,6 +1,14 @@
 cmake_minimum_required ( VERSION 3.28 )
 include(cmake/AddFile.cmake)
-project(RT_project LANGUAGES CXX CUDA)
+set(CMAKE_CUDA_SEPARABLE_COMPILATION ON)
+if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CUDA_ARCHITECTURES "50;52;53;60;61;62;70;72;75;80;86;87;89;90")
+else()
+    set(CMAKE_CUDA_ARCHITECTURES native)
+endif()
+endif()
+project(RT_project LANGUAGES CUDA CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CUDA_STANDARD 20)
@@ -15,15 +23,16 @@ set ( SOURCE_RT_PROJECT
         hittable_list.cuh
         material.cuh
         geometry.cuh
-        texture.cuh
+        image_loader.cu
+        texture.cu
         .manifest
         color.cuh
         interval.cuh
-        image_loader.cuh
         helpers.cuh
         vec.cuh
         ray.cuh
 )
+
 find_package(CUDAToolkit COMPONENTS curand REQUIRED)
 find_package(SDL2 CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -31,15 +40,9 @@ find_package(glm CONFIG REQUIRED)
 add_library(commons_headers INTERFACE)
 target_include_directories(commons_headers INTERFACE include)
 
-
-add_executable(RT_project  ${SOURCE_RT_PROJECT})
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-set_property(TARGET RT_project PROPERTY CUDA_ARCHITECTURES "50;52;53;60;61;62;70;72;75;80;86;87;89;90")
-else()
-set_property(TARGET RT_project PROPERTY CUDA_ARCHITECTURES "75;89")
-endif()
+add_executable(RT_project ${SOURCE_RT_PROJECT})
+target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 # Why can this option affect performance?
-set_target_properties(RT_project PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 target_link_libraries(RT_project PRIVATE CUDA::curand)
 target_link_libraries(RT_project PRIVATE glm::glm)
 target_link_libraries(RT_project PRIVATE commons_headers)
@@ -48,7 +51,6 @@ target_link_libraries(commons_headers
         $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
         $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
 )
-target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 
 add_custom_file(RT_project images/earthmap.jpg images/earthmap.jpg)
 add_custom_file(RT_project test_script.py test_script.py)

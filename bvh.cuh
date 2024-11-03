@@ -34,6 +34,7 @@ class bvh_node final : public hittable {
         while(stack_index>-1) {
             auto [node, start_t, end_t] = info_stack[stack_index];
             stack_index--;
+            // Build the bounding box of the span of source objects.
             node->bbox = aabb::empty();
             for (size_t object_index=start_t; object_index < end_t; object_index++)
                 node->bbox = aabb(node->bbox, objects[object_index]->bounding_box());
@@ -80,7 +81,6 @@ class bvh_node final : public hittable {
                 stack_index += 2;
             }
         }
-        // Build the bounding box of the span of source objects.
     }
 
     __host__ __device__ ~bvh_node() override {
