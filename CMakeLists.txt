@@ -31,6 +31,8 @@ set ( SOURCE_RT_PROJECT
         helpers.cuh
         vec.cuh
         ray.cuh
+        hittable.cu
+        hittable_list.cu
 )
 
 find_package(CUDAToolkit COMPONENTS curand REQUIRED)
