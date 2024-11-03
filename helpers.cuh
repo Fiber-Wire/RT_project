@@ -1,20 +1,9 @@
 #ifndef HELPERS_H
 #define HELPERS_H
 
-#include <cmath>
-#include <cstdlib>
 #include <curand_kernel.h>
-#include <iostream>
 #include <limits>
-#include <memory>
 #include <random>
-
-
-// C++ Std Usings
-
-using std::make_shared;
-using std::shared_ptr;
-
 
 // Constants
 

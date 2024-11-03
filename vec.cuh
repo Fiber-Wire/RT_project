@@ -6,7 +6,7 @@
 using vec3 = glm::vec3;
 // point3 is just an alias for vec3, but useful for geometric clarity in the code.
 using point3 = vec3;
-
+#include "helpers.cuh"
 
 // Vector Utility Functions
 __host__ __device__ inline bool near_zero(const vec3 &v) {
@@ -76,7 +76,7 @@ public:
         p = p * 0.5f + 0.5f;
         vec_ = p;
     }
-    __host__ __device__ operator vec3 () const {
+    __host__ __device__ explicit operator vec3 () const {
         glm::vec3 tmp = {vec_.x, vec_.y, 1.0f - abs(vec_.x) - abs(vec_.y)};
 
         // https://twitter.com/Stubbesaurus/status/937994790553227264

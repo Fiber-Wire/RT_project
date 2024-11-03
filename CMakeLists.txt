@@ -41,6 +41,7 @@ add_library(commons_headers INTERFACE)
 target_include_directories(commons_headers INTERFACE include)
 
 add_executable(RT_project ${SOURCE_RT_PROJECT})
+set_property(TARGET RT_project PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 # Why can this option affect performance?
 target_link_libraries(RT_project PRIVATE CUDA::curand)

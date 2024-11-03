@@ -6,7 +6,7 @@ class interval {
   public:
     float min, max;
 
-    __host__ __device__ interval() : min(+INFINITY), max(-INFINITY) {} // Default interval is empty
+    __host__ __device__ interval() : min(+infinity), max(-infinity) {} // Default interval is empty
 
     __host__ __device__ interval(const float min, const float max) : min(min), max(max) {}
 

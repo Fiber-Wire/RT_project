@@ -3,6 +3,7 @@
 
 #include "interval.cuh"
 #include "vec.cuh"
+#include <iostream>
 
 using color = vec3;
 
@@ -13,26 +14,6 @@ __host__ __device__ inline float linear_to_gamma(const float linear_component)
         return std::sqrt(linear_component);
 
     return 0;
-}
-
-__host__ __device__ void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte);
-
-inline void write_color(std::ostream& out, const color& pixel_color) {
-    unsigned int rbyte;
-    unsigned int gbyte;
-    unsigned int bbyte;
-    color_remap(pixel_color, rbyte, gbyte, bbyte);
-
-    // Write out the pixel color components.
-    out << rbyte << ' ' << gbyte << ' ' << bbyte << '\n';
-}
-
-__host__ __device__ inline unsigned int pixel_from_color(const color& pixel_color) {
-    unsigned int rbyte;
-    unsigned int gbyte;
-    unsigned int bbyte;
-    color_remap(pixel_color, rbyte, gbyte, bbyte);
-    return (rbyte<<16)+(gbyte<<8)+(bbyte);
 }
 
 __host__ __device__ inline void color_remap(const color &pixel_color, unsigned int &rbyte, unsigned int &gbyte, unsigned int &bbyte) {
@@ -52,5 +33,22 @@ __host__ __device__ inline void color_remap(const color &pixel_color, unsigned i
 
 }
 
+inline void write_color(std::ostream& out, const color& pixel_color) {
+    unsigned int rbyte;
+    unsigned int gbyte;
+    unsigned int bbyte;
+    color_remap(pixel_color, rbyte, gbyte, bbyte);
+
+    // Write out the pixel color components.
+    out << rbyte << ' ' << gbyte << ' ' << bbyte << '\n';
+}
+
+__host__ __device__ inline unsigned int pixel_from_color(const color& pixel_color) {
+    unsigned int rbyte;
+    unsigned int gbyte;
+    unsigned int bbyte;
+    color_remap(pixel_color, rbyte, gbyte, bbyte);
+    return (rbyte<<16)+(gbyte<<8)+(bbyte);
+}
 
 #endif

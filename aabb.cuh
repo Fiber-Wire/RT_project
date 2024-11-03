@@ -47,8 +47,8 @@ class aabb {
             const interval& ax = axis_interval(axis);
             const float adinv = 1.0f / ray_dir[axis];
 
-            auto t0 = (ax.min - ray_orig[axis]) * adinv;
-            auto t1 = (ax.max - ray_orig[axis]) * adinv;
+            const auto t0 = (ax.min - ray_orig[axis]) * adinv;
+            const auto t1 = (ax.max - ray_orig[axis]) * adinv;
 
             if (t0 < t1) {
                 if (t0 > ray_t.min) ray_t.min = t0;
@@ -85,7 +85,7 @@ class aabb {
     __host__ __device__ void pad_to_minimums() {
         // Adjust the AABB so that no side is narrower than some delta, padding if necessary.
 
-        const float delta = 0.0001f;
+        constexpr float delta = 0.0001f;
         if (x.size() < delta) x = x.expand(delta);
         if (y.size() < delta) y = y.expand(delta);
         if (z.size() < delta) z = z.expand(delta);
@@ -93,11 +93,11 @@ class aabb {
 };
 
 
-__host__ __device__ aabb operator+(const aabb& bbox, const vec3& offset) {
+__host__ __device__ inline aabb operator+(const aabb& bbox, const vec3& offset) {
     return aabb(bbox.x + offset.x, bbox.y + offset.y, bbox.z + offset.z);
 }
 
-__host__ __device__ aabb operator+(const vec3& offset, const aabb& bbox) {
+__host__ __device__ inline aabb operator+(const vec3& offset, const aabb& bbox) {
     return bbox + offset;
 }
 
