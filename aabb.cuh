@@ -42,7 +42,7 @@ class aabb {
     __host__ __device__ bool hit(const ray& r, interval ray_t) const {
         const point3& ray_orig = r.origin();
         const vec3&   ray_dir  = r.direction();
-
+        #pragma unroll
         for (int axis = 0; axis < 3; axis++) {
             const interval& ax = axis_interval(axis);
             const float adinv = 1.0f / ray_dir[axis];
@@ -50,18 +50,10 @@ class aabb {
             const auto t0 = (ax.min - ray_orig[axis]) * adinv;
             const auto t1 = (ax.max - ray_orig[axis]) * adinv;
 
-            if (t0 < t1) {
-                if (t0 > ray_t.min) ray_t.min = t0;
-                if (t1 < ray_t.max) ray_t.max = t1;
-            } else {
-                if (t1 > ray_t.min) ray_t.min = t1;
-                if (t0 < ray_t.max) ray_t.max = t0;
-            }
-
-            if (ray_t.max <= ray_t.min)
-                return false;
+            ray_t.min = max(ray_t.min, min(t0, t1));
+            ray_t.max = min(ray_t.max, max(t0, t1));
         }
-        return true;
+        return ray_t.max > ray_t.min;
     }
 
     __host__ __device__ int longest_axis() const {
