@@ -7,7 +7,9 @@ struct image_record {
     int image_width = 0;
     int image_height = 0;
     int bytes_per_pixel = 3;
-    __device__ __host__ int bytes_per_scanline() const;
+    __device__ __host__ int bytes_per_scanline() const {
+        return bytes_per_pixel * image_width;
+    }
 };
 
 class image_loader {

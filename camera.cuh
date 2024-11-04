@@ -1,7 +1,7 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include "hittable.cuh"
+#include "get_hit.cuh"
 #include "material.cuh"
 #include <span>
 #include <utils.hpp>
@@ -162,7 +162,7 @@ class camera {
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
-    __host__ __device__ color ray_color(const ray& r, int depth, const bvh_node* world, curandState* rnd) const {
+    __noinline__ __host__ __device__ color ray_color(const ray& r, int depth, const bvh_node* world, curandState* rnd) const {
         ray cur_ray = r;
         auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
         for(int i = 0; i < depth; i++) {

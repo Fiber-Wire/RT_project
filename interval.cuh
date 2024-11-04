@@ -35,7 +35,7 @@ class interval {
     }
 
     __host__ __device__ interval expand(const float delta) const {
-        auto padding = delta/2;
+        const auto padding = delta/2;
         return interval(min - padding, max + padding);
     }
 

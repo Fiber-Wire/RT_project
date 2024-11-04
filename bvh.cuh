@@ -130,11 +130,11 @@ class bvh_node final : public hittable {
                     stack_index+=1;
                     bvh_stack[stack_index] = static_cast<bvh_node const*>(current_node->left);
                 } else {
-                    const bool hit_left = current_node->left->hit(r, interval(ray_t.min, max_t), rec);
+                    const bool hit_left = get_hit(r, interval(ray_t.min, max_t), rec, current_node->left);
                     max_t = hit_left ? rec.t : max_t;
                     is_hit = is_hit || hit_left;
                     if (current_node->right != current_node->left) {
-                        const bool hit_right = current_node->right->hit(r, interval(ray_t.min, max_t), rec);
+                        const bool hit_right = get_hit(r, interval(ray_t.min, max_t), rec, current_node->right);
                         max_t = hit_right ? rec.t : max_t;
                         is_hit = is_hit || hit_right;
                     }

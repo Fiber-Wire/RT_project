@@ -5,7 +5,7 @@ if (NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_CUDA_ARCHITECTURES "50;52;53;60;61;62;70;72;75;80;86;87;89;90")
 else()
-    set(CMAKE_CUDA_ARCHITECTURES native)
+    set(CMAKE_CUDA_ARCHITECTURES "75;89")
 endif()
 endif()
 project(RT_project LANGUAGES CUDA CXX)
@@ -24,15 +24,13 @@ set ( SOURCE_RT_PROJECT
         material.cuh
         geometry.cuh
         image_loader.cu
-        texture.cu
         .manifest
         color.cuh
         interval.cuh
         helpers.cuh
         vec.cuh
         ray.cuh
-        hittable.cu
-        hittable_list.cu
+        get_hit.cuh
 )
 
 find_package(CUDAToolkit COMPONENTS curand REQUIRED)
@@ -43,9 +41,9 @@ add_library(commons_headers INTERFACE)
 target_include_directories(commons_headers INTERFACE include)
 
 add_executable(RT_project ${SOURCE_RT_PROJECT})
-set_property(TARGET RT_project PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 # Why can this option affect performance?
+set_property(TARGET RT_project PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
+target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(RT_project PRIVATE CUDA::curand)
 target_link_libraries(RT_project PRIVATE glm::glm)
 target_link_libraries(RT_project PRIVATE commons_headers)

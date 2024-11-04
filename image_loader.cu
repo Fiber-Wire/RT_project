@@ -14,11 +14,6 @@
 #include <utils.hpp>
 #include <cstdlib>
 
-__device__ __host__ int image_record::bytes_per_scanline() const {
-    return bytes_per_pixel * image_width;
-}
-
-
 image_loader::image_loader() {}
 
 image_loader::image_loader(const char* image_filename) {
