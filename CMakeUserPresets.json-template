@@ -5,6 +5,10 @@
       "name": "dev-build",
       "inherits": "relwithdebinfo",
       "environment": {
+      },
+      "cacheVariables": {
+        "CMAKE_CUDA_ARCHITECTURES": "89",
+        "CUDA_MAXREG": 52
       }
     },
     {

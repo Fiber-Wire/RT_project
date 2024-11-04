@@ -8,6 +8,9 @@ else()
     set(CMAKE_CUDA_ARCHITECTURES "75;89")
 endif()
 endif()
+if (NOT DEFINED CUDA_MAXREG)
+    set(CUDA_MAXREG 52)
+endif ()
 project(RT_project LANGUAGES CUDA CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -15,22 +18,8 @@ set(CMAKE_CUDA_STANDARD 20)
 
 set ( SOURCE_RT_PROJECT
         main.cu
-        globals.cuh
-        aabb.cuh
-        bvh.cuh
-        camera.cuh
-        hittable.cuh
-        hittable_list.cuh
-        material.cuh
-        geometry.cuh
         image_loader.cu
         .manifest
-        color.cuh
-        interval.cuh
-        helpers.cuh
-        vec.cuh
-        ray.cuh
-        get_hit.cuh
 )
 
 find_package(CUDAToolkit COMPONENTS curand REQUIRED)
@@ -41,7 +30,7 @@ add_library(commons_headers INTERFACE)
 target_include_directories(commons_headers INTERFACE include)
 
 add_executable(RT_project ${SOURCE_RT_PROJECT})
-# Why can this option affect performance?
+# Why does LTO make performance worse?
 set_property(TARGET RT_project PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE)
 target_include_directories(RT_project PRIVATE ${Stb_INCLUDE_DIR})
 target_link_libraries(RT_project PRIVATE CUDA::curand)
@@ -79,7 +68,8 @@ if (CMAKE_CUDA_COMPILER)
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
         target_compile_options(RT_project PRIVATE --expt-relaxed-constexpr --use_fast_math)
     else()
-        target_compile_options(RT_project PRIVATE --expt-relaxed-constexpr --generate-line-info --use_fast_math)
+        target_compile_options(RT_project PRIVATE
+                --expt-relaxed-constexpr --generate-line-info --use_fast_math -maxrregcount ${CUDA_MAXREG})
     endif()
 
 endif ()

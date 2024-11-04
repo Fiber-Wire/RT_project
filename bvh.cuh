@@ -113,7 +113,7 @@ class bvh_node final : public hittable {
         return *this;
     }
 
-    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         bvh_node const * bvh_stack[10];
         int stack_index = 0;
         bvh_stack[stack_index] = this;

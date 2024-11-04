@@ -8,7 +8,7 @@
 #include "hittable_list.cuh"
 #include "bvh.cuh"
 #include "geometry.cuh"
-__noinline__ __host__ __device__ inline bool get_hit(const ray& r, const interval ray_t, hit_record& rec, const hittable* hit) {
+__host__ __device__ inline bool get_hit(const ray& r, const interval ray_t, hit_record& rec, const hittable* hit) {
     bool hit_anything = false;
     switch (hit->type) {
         case hit_type::eBVH: hit_anything = static_cast<const bvh_node*>(hit)->hit(r, ray_t, rec); break;

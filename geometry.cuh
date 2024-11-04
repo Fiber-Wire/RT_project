@@ -20,7 +20,7 @@ class sphere final : public hittable {
         type = hit_type::eSphere;
     }
 
-    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         const vec3 oc = center - r.origin();
         const auto a = glm::dot(r.direction(), r.direction());
         const auto h = dot(r.direction(), oc);
@@ -97,7 +97,7 @@ class quad final : public hittable {
         return {bbox_diagonal1, bbox_diagonal2};
     }
 
-    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         const auto denom = dot(normal, r.direction());
 
         // No hit if the ray is parallel to the plane.

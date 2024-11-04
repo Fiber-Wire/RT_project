@@ -71,7 +71,7 @@ class hittable_list final : public hittable {
 
     }
 
-    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const override {
+    __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         hit_record temp_rec;
         bool hit_anything = false;
         auto closest_so_far = ray_t.max;
