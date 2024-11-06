@@ -14,17 +14,16 @@ class hit_record {
     float u;
     float v;
 
-    vec3 normal;
+    NormVec3 normal;
     float t;
-
-    bool front_face;
     short mat_id;
+    bool front_face;
 
     __host__ __device__ void set_face_normal(const ray& r, const vec3& outward_normal) {
         // Sets the hit record normal vector.
         // NOTE: the parameter `outward_normal` is assumed to have unit length.
 
-        front_face = dot(r.direction(), outward_normal) < 0;
+        front_face = dot(vec3(r.direction()), outward_normal) < 0;
         normal = front_face ? outward_normal : -outward_normal;
     }
 };
@@ -62,7 +61,7 @@ class translate final : public hittable {
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         // Move the ray backwards by the offset
-        const ray offset_r(r.origin() - offset, r.direction());
+        const ray offset_r(r.origin() - offset, vec3(r.direction()));
 
         // Determine whether an intersection exists along the offset ray (and if so, where)
         if (!get_hit(offset_r, ray_t, rec, object))
@@ -129,11 +128,11 @@ class rotate_y final : public hittable {
             r.origin().y,
             (sin_theta * r.origin().x) + (cos_theta * r.origin().z)
         );
-
+        const auto decomp_normal = vec3(r.direction());
         const auto direction = vec3(
-            (cos_theta * r.direction().x) - (sin_theta * r.direction().z),
-            r.direction().y,
-            (sin_theta * r.direction().x) + (cos_theta * r.direction().z)
+            (cos_theta * decomp_normal.x) - (sin_theta * decomp_normal.z),
+            decomp_normal.y,
+            (sin_theta * decomp_normal.x) + (cos_theta * decomp_normal.z)
         );
 
         const ray rotated_r(origin, direction);
@@ -145,11 +144,11 @@ class rotate_y final : public hittable {
 
         // Transform the intersection from object space back to world space.
         // No need to worry about hit-point
-
+        const auto decomp_rec_normal = vec3(rec.normal);
         rec.normal = vec3(
-            (cos_theta * rec.normal.x) + (sin_theta * rec.normal.z),
-            rec.normal.y,
-            (-sin_theta * rec.normal.x) + (cos_theta * rec.normal.z)
+            (cos_theta * decomp_rec_normal.x) + (sin_theta * decomp_rec_normal.z),
+            decomp_rec_normal.y,
+            (-sin_theta * decomp_rec_normal.x) + (cos_theta * decomp_rec_normal.z)
         );
 
         return true;

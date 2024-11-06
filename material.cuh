@@ -14,9 +14,9 @@ class material {
         return color(0,0,0);
     }
 
-    __host__ __device__ virtual void scatter(
-        const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd
-    ) const {}
+    __host__ __device__ virtual color scatter(
+        const ray& r_in, const hit_record& rec, NormVec3& scattered_direction, curandState* rnd
+    ) const { return {};}
 
     bool will_scatter = false;
 };
@@ -48,15 +48,13 @@ class lambertian final : public material {
         return *this;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
+    __host__ __device__ color scatter(const ray& r_in, const hit_record& rec, NormVec3& scattered_direction, curandState* rnd)
     const override {
-        auto scatter_direction = rec.normal + random_unit_vector(rnd);
+        const auto decomp_normal = vec3(rec.normal);
+        const auto scatter_direction = decomp_normal + random_unit_vector(rnd);
         // Catch degenerate scatter direction
-        if (near_zero(scatter_direction))
-            scatter_direction = rec.normal;
-
-        scattered_direction = normalize(scatter_direction);
-        attenuation = tex->value(rec.u, rec.v);
+        scattered_direction = near_zero(scatter_direction) ? decomp_normal : scatter_direction;
+        return tex->value(rec.u, rec.v);
     }
 
   private:
@@ -71,15 +69,17 @@ class metal final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
+    __host__ __device__ color scatter(const ray& r_in, const hit_record& rec, NormVec3& scattered_direction, curandState* rnd)
     const override {
-        attenuation = albedo;
+        const auto decomp_normal = vec3(rec.normal);
+        vec3 decomp_dir;
         do {
             // direction is wrong
-            scattered_direction = fuzz*random_unit_vector(rnd)-r_in.direction();
-        } while (dot(scattered_direction, rec.normal) <= 0);
+            decomp_dir = fuzz*random_unit_vector(rnd)-vec3(r_in.direction());
+        } while (dot(decomp_dir, decomp_normal) <= 0);
         // Flip it to the correct direction
-        scattered_direction = normalize(-scattered_direction+2*dot(rec.normal,scattered_direction)*rec.normal);
+        scattered_direction = normalize(-decomp_dir+2*dot(decomp_normal,decomp_dir)*decomp_normal);
+        return albedo;
     }
 
   private:
@@ -94,29 +94,30 @@ class dielectric final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
+    __host__ __device__ color scatter(const ray& r_in, const hit_record& rec, NormVec3& scattered_direction, curandState* rnd)
     const override {
-        attenuation = color(1.0f, 1.0f, 1.0f);
+        const auto decomp_normal = vec3(rec.normal);
         #ifdef __CUDA_ARCH__
         const float ri = rec.front_face ? __fdividef(1.0f,refraction_index) : refraction_index;
         #else
         const float ri = rec.front_face ? (1.0f/refraction_index) : refraction_index;
         #endif
 
-        const vec3 unit_direction = r_in.direction();
+        const auto unit_direction = vec3(r_in.direction());
         #ifdef __CUDA_ARCH__
-        const float cos_theta = __saturatef(dot(-unit_direction, rec.normal));
+        const float cos_theta = __saturatef(dot(-unit_direction, decomp_normal));
         #else
-        const float cos_theta = min(dot(-unit_direction, rec.normal), 1.0f);
+        const float cos_theta = min(dot(-unit_direction, decomp_normal), 1.0f);
         #endif
         const float sin_theta = sqrtf(1.0f - cos_theta*cos_theta);
 
         const bool cannot_refract = ri * sin_theta > 1.0f;
 
         if (cannot_refract || reflectance(cos_theta, ri) > random_float(rnd))
-            scattered_direction = reflect(unit_direction, rec.normal);
+            scattered_direction = reflect(unit_direction, decomp_normal);
         else
-            scattered_direction = refract(unit_direction, rec.normal, ri);
+            scattered_direction = refract(unit_direction, decomp_normal, ri);
+        return {1.0f, 1.0f, 1.0f};
     }
 
   private:
@@ -183,10 +184,10 @@ class isotropic final : public material {
         will_scatter = true;
     }
 
-    __host__ __device__ void scatter(const ray& r_in, const hit_record& rec, color& attenuation, vec3& scattered_direction, curandState* rnd)
+    __host__ __device__ color scatter(const ray& r_in, const hit_record& rec, NormVec3& scattered_direction, curandState* rnd)
     const override {
         scattered_direction = random_unit_vector(rnd);
-        attenuation = tex->value(rec.u, rec.v);
+        return tex->value(rec.u, rec.v);
     }
 
     __host__ __device__ isotropic(const isotropic& other) {

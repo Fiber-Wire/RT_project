@@ -79,7 +79,6 @@ public:
     __host__ __device__ explicit operator vec3 () const {
         glm::vec2 const f = vec_ * 2.0f - 1.0f;
         glm::vec3 tmp = {f.x, f.y, 1.0f - abs(f.x) - abs(f.y)};
-        //glm::vec3 tmp = {vec_.x, vec_.y, 1.0f - abs(vec_.x) - abs(vec_.y)};
 
         // https://twitter.com/Stubbesaurus/status/937994790553227264
         const float t = max(-tmp.z, 0.0f);

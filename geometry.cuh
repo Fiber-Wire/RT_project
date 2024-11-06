@@ -22,8 +22,8 @@ class sphere final : public hittable {
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
         const vec3 oc = center - r.origin();
-        const auto a = glm::dot(r.direction(), r.direction());
-        const auto h = dot(r.direction(), oc);
+        constexpr auto a = 1.0f;//glm::dot(r.direction(), r.direction());
+        const auto h = dot(vec3(r.direction()), oc);
         const auto c = glm::dot(oc, oc) - radius*radius;
 
         const auto discriminant = h*h - a*c;
@@ -96,7 +96,7 @@ class quad final : public hittable {
     }
 
     __host__ __device__ bool hit(const ray& r, const interval ray_t, hit_record& rec) const {
-        const auto denom = dot(normal, r.direction());
+        const auto denom = dot(normal, vec3(r.direction()));
 
         // No hit if the ray is parallel to the plane.
         if (std::fabs(denom) < 1e-8f)

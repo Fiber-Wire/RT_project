@@ -162,7 +162,7 @@ class camera {
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
-    __host__ __device__ color ray_color(const ray& r, int depth, const bvh_node* world, curandState* rnd) const {
+    __host__ __device__ color ray_color(const ray& r, const int depth, const bvh_node* world, curandState* rnd) const {
         ray cur_ray = r;
         auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
         for(int i = 0; i < depth; i++) {
@@ -172,19 +172,19 @@ class camera {
             if (!world->hit(cur_ray, interval(0.001f, infinity), rec))
                 return cur_attenuation * background;
 
-            vec3 scattered_direction;
+            NormVec3 scattered_direction;
             color attenuation;
 
 #ifdef __CUDA_ARCH__
             if (CUDA_MATERIALS[rec.mat_id]->will_scatter) {
-                CUDA_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
+                attenuation = CUDA_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, scattered_direction, rnd);
             } else {
                 color color_from_emission = CUDA_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
                 return cur_attenuation * color_from_emission;
             }
 #else
             if (HOST_MATERIALS[rec.mat_id]->will_scatter) {
-                HOST_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
+                attenuation = HOST_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, scattered_direction, rnd);
             } else {
                 color color_from_emission = HOST_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
                 return cur_attenuation * color_from_emission;
