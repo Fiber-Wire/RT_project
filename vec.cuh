@@ -82,8 +82,13 @@ public:
 
         // https://twitter.com/Stubbesaurus/status/937994790553227264
         const float t = max(-tmp.z, 0.0f);
+        #ifdef __CUDA_ARCH__
+        tmp.x += copysignf(t, -tmp.x);
+        tmp.y += copysignf(t, -tmp.y);
+        #else
         tmp.x += tmp.x >= 0.0f ? -t : t;
         tmp.y += tmp.y >= 0.0f ? -t : t;
+        #endif
 
         return normalize(tmp);
     }
@@ -92,12 +97,19 @@ public:
         return *this;
     }
 private:
+    /// 0<= vec_.xy <= 1
     glm::vec2 vec_{};
 
     __host__ __device__ static glm::vec2 OctWrap(const glm::vec2 v) {
         glm::vec2 p;
+        #ifdef __CUDA_ARCH__
+        p.x = copysignf(1.0f-abs(v.y), v.x);
+        p.y = copysignf(1.0f-abs(v.x), v.y);
+        #else
         p.x = (1.0f-abs(v.y))*(v.x >= 0.0f ? 1.0f : -1.0f);
         p.y = (1.0f-abs(v.x))*(v.y >= 0.0f ? 1.0f : -1.0f);
+        #endif
+
         return p;
     }
 };

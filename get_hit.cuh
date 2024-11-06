@@ -11,7 +11,7 @@
 __host__ __device__ inline bool get_hit(const ray& r, const interval ray_t, hit_record& rec, const hittable* hit) {
     bool hit_anything = false;
     switch (hit->type) {
-        case hit_type::eBVH: hit_anything = static_cast<const bvh_node*>(hit)->hit(r, ray_t, rec); break;
+        case hit_type::eBVH: hit_anything = static_cast<const bvh_tree*>(hit)->hit(r, ray_t, rec); break;
         case hit_type::eTranslate: hit_anything = static_cast<const translate*>(hit)->hit(r, ray_t, rec); break;
         case hit_type::eRotate_y: hit_anything = static_cast<const rotate_y*>(hit)->hit(r, ray_t, rec); break;
         case hit_type::eList: hit_anything = static_cast<const hittable_list*>(hit)->hit(r, ray_t, rec); break;
