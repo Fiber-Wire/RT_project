@@ -175,12 +175,21 @@ class camera {
             vec3 scattered_direction;
             color attenuation;
 
-            if (rec.mat->will_scatter) {
-                rec.mat->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
+#ifdef __CUDA_ARCH__
+            if (CUDA_MATERIALS[rec.mat_id]->will_scatter) {
+                CUDA_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
             } else {
-                color color_from_emission = rec.mat->emitted(rec.u, rec.v);
+                color color_from_emission = CUDA_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
                 return cur_attenuation * color_from_emission;
             }
+#else
+            if (HOST_MATERIALS[rec.mat_id]->will_scatter) {
+                HOST_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, attenuation, scattered_direction, rnd);
+            } else {
+                color color_from_emission = HOST_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
+                return cur_attenuation * color_from_emission;
+            }
+#endif
 
             cur_attenuation *= attenuation;
             cur_ray = ray(cur_ray.at(rec.t), scattered_direction);

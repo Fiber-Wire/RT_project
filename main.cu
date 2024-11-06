@@ -20,24 +20,29 @@
 
 void cornell_box() {
     hittable_list world{1000};
-    std::vector<material*> objects;
+    auto material_handles = new material*[4];
+    material_handles[0] = new lambertian(color(.65, .05, .05));
+    material_handles[1] = new lambertian(color(.73, .73, .73));
+    material_handles[2] = new lambertian(color(.12, .45, .15));
+    material_handles[3] = new diffuse_light(color(15, 15, 15));
+#ifdef __CUDA_ARCH__
+    CUDA_MATERIALS = material_handles;
+#else
+    HOST_MATERIALS = material_handles;
+#endif
+
     auto quads_for_box = new utils::NaiveVector<quad>{12};
 
-    const auto red   = new lambertian(color(.65, .05, .05));
-    const auto white = new lambertian(color(.73, .73, .73));
-    const auto green = new lambertian(color(.12, .45, .15));
-    const auto light = new diffuse_light(color(15, 15, 15));
-    objects.push_back(red);
-    objects.push_back(white);
-    objects.push_back(green);
-    objects.push_back(light);
-    const auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green);
-    const auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red);
-    const auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light);
-    const auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white);
-    const auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white);
-    const auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white);
-
+    const auto red   = material_handles[0];
+    const auto white = material_handles[1];
+    const auto green = material_handles[2];
+    const auto light = material_handles[3];
+    const auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), 2);
+    const auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), 0);
+    const auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), 3);
+    const auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), 1);
+    const auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), 1);
+    const auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), 1);
     world.add(quad_1);
     world.add(quad_2);
     world.add(quad_3);
@@ -45,12 +50,12 @@ void cornell_box() {
     world.add(quad_5);
     world.add(quad_6);
 
-    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white,quads_for_box);
+    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), 1,quads_for_box);
     const auto box1_rotate = new rotate_y(box1,15);
     const auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
     world.add(box1_translate);
 
-    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white, quads_for_box);
+    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), 1, quads_for_box);
     const auto box2_rotate = new rotate_y(box2, -18);
     const auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
     world.add(box2_translate);
@@ -86,6 +91,8 @@ __host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_re
     auto material_handles = new material*[8];
 #ifdef __CUDA_ARCH__
     CUDA_MATERIALS = material_handles;
+#else
+    HOST_MATERIALS = material_handles;
 #endif
     material_handles[0] = new lambertian(color(0.48, 0.83, 0.53));
     material_handles[1] = new diffuse_light(color(7, 7, 7));
@@ -117,7 +124,7 @@ __host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_re
 #endif
             auto z1 = z0 + w-0.1f;
 
-            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground, quads);
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), short(0), quads);
             boxes1.add(static_cast<hittable *>(box3));
         }
     }
@@ -126,27 +133,27 @@ __host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_re
 
     // 2nd
     auto light = material_handles[1];
-    quads->push({point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), light});
+    quads->push({point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), 1});
     world.add(quads->end());
 
     // 3rd
     auto dielectric_sphere = material_handles[2];
-    spheres->push({point3(260, 150, 45), 50,dielectric_sphere});
+    spheres->push({point3(260, 150, 45), 50, 2});
     world.add(spheres->end());
 
     //4th
     auto metal_sphere = material_handles[3];
-    spheres->push({point3(0, 150, 145), 50, metal_sphere});
+    spheres->push({point3(0, 150, 145), 50, 3});
     world.add(spheres->end());
 
     //5th
     auto dielectric_ground = material_handles[4];
-    spheres->push({point3(360, 150, 145), 70, dielectric_ground});
+    spheres->push({point3(360, 150, 145), 70, 4});
     world.add(spheres->end());
 
     //6th
     auto lambertian_emat = material_handles[5];
-    spheres->push({point3(400, 200, 400), 100, lambertian_emat});
+    spheres->push({point3(400, 200, 400), 100, 5});
     world.add(spheres->end());
 
     //7th
@@ -160,7 +167,7 @@ __host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_re
 #else
         auto center = get_rand_vec3(j);
 #endif
-        spheres->push({center, 10, white});
+        spheres->push({center, 10, 6});
         boxes2.add(spheres->end());
     }
     auto bvh_node_box = new bvh_node(boxes2);
@@ -170,7 +177,7 @@ __host__ __device__ bvh_node* final_scene_build(curandState* rnd, const image_re
 
     //8th
     auto metal_2 = material_handles[7];
-    spheres->push({point3(240, 320, 400), 60, metal_2});
+    spheres->push({point3(240, 320, 400), 60, 7});
     world.add(spheres->end());
 
     auto tree = new bvh_node{world};

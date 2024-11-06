@@ -10,13 +10,13 @@
 
 class sphere final : public hittable {
   public:
-    __host__ __device__ sphere(): radius(0), mat(nullptr) {
+    __host__ __device__ sphere(): radius(0), mat_id(0) {
         type = hit_type::eSphere;
     }
 
     // Stationary Sphere
-    __host__ __device__ sphere(const point3& center, const float radius, material* mat)
-      : radius(max(0.0f,radius)), center(center), mat(mat) {
+    __host__ __device__ sphere(const point3& center, const float radius, const short mat_id)
+      : radius(max(0.0f,radius)), center(center), mat_id(mat_id) {
         type = hit_type::eSphere;
     }
 
@@ -44,8 +44,7 @@ class sphere final : public hittable {
         const vec3 outward_normal = (r.at(rec.t) - center) / radius;
         rec.set_face_normal(r, outward_normal);
         get_sphere_uv(outward_normal, rec.u, rec.v);
-        rec.mat = mat;
-
+        rec.mat_id = mat_id;
         return true;
     }
 
@@ -57,7 +56,7 @@ class sphere final : public hittable {
   private:
     float radius;
     vec3 center{};
-    material* mat;
+    short mat_id;
 
     __host__ __device__ static void get_sphere_uv(const point3& p, float& u, float& v) {
         // p: a given point on the sphere of radius one, centered at the origin.
@@ -76,12 +75,11 @@ class sphere final : public hittable {
 };
 class quad final : public hittable {
   public:
-    __host__ __device__ quad(): Q(), u(), v(), inv_len_n(0), mat(nullptr), normal(), D(0) {
+    __host__ __device__ quad(): Q(), u(), v(), inv_len_n(0), normal(), D(0) ,mat_id(0) {
         type = hit_type::eQuad;
     }
-
-    __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, material* mat)
-      : Q(Q), u(u), v(v), mat(mat)
+    __host__ __device__ quad(const point3& Q, const vec3& u, const vec3& v, short mat_id)
+      : Q(Q), u(u), v(v), mat_id(mat_id)
     {
         type = hit_type::eQuad;
         auto n = cross(u, v);
@@ -120,7 +118,7 @@ class quad final : public hittable {
 
         // Ray hits the 2D shape; set the rest of the hit record and return true.
         rec.t = t;
-        rec.mat = mat;
+        rec.mat_id = mat_id;
         rec.set_face_normal(r, normal);
 
         return true;
@@ -144,13 +142,12 @@ class quad final : public hittable {
     vec3 u, v;
     //vec3 w;
     float inv_len_n;
-    material* mat;
     vec3 normal;
     float D;
+    short mat_id;
 };
 
-/// Returns the 3D box (six sides) that contains the two opposite vertices a & b.
-__host__ __device__ inline hittable_list* create_box(const point3& a, const point3& b, material* mat,
+__host__ __device__ inline hittable_list* create_box(const point3& a, const point3& b, short mat_id,
     utils::NaiveVector<quad>* quads)
 {
     const auto sides = new hittable_list(6);
@@ -163,17 +160,17 @@ __host__ __device__ inline hittable_list* create_box(const point3& a, const poin
     const auto dy = vec3(0, max.y - min.y, 0);
     const auto dz = vec3(0, 0, max.z - min.z);
 
-    quads->push({point3(min.x, min.y, max.z),  dx,  dy, mat}); // front
+    quads->push({point3(min.x, min.y, max.z),  dx,  dy, mat_id}); // front
     sides->add(quads->end());
-    quads->push({point3(max.x, min.y, max.z), -dz,  dy, mat}); // right
+    quads->push({point3(max.x, min.y, max.z), -dz,  dy, mat_id}); // right
     sides->add(quads->end());
-    quads->push({point3(max.x, min.y, min.z), -dx,  dy, mat}); // back
+    quads->push({point3(max.x, min.y, min.z), -dx,  dy, mat_id}); // back
     sides->add(quads->end());
-    quads->push({point3(min.x, min.y, min.z),  dz,  dy, mat}); // left
+    quads->push({point3(min.x, min.y, min.z),  dz,  dy, mat_id}); // left
     sides->add(quads->end());
-    quads->push({point3(min.x, max.y, max.z),  dx, -dz, mat}); // top
+    quads->push({point3(min.x, max.y, max.z),  dx, -dz, mat_id}); // top
     sides->add(quads->end());
-    quads->push({point3(min.x, min.y, min.z),  dx,  dz, mat}); // bottom
+    quads->push({point3(min.x, min.y, min.z),  dx,  dz, mat_id}); // bottom
     sides->add(quads->end());
 
     return sides;

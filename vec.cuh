@@ -77,7 +77,9 @@ public:
         vec_ = p;
     }
     __host__ __device__ explicit operator vec3 () const {
-        glm::vec3 tmp = {vec_.x, vec_.y, 1.0f - abs(vec_.x) - abs(vec_.y)};
+        glm::vec2 const f = vec_ * 2.0f - 1.0f;
+        glm::vec3 tmp = {f.x, f.y, 1.0f - abs(f.x) - abs(f.y)};
+        //glm::vec3 tmp = {vec_.x, vec_.y, 1.0f - abs(vec_.x) - abs(vec_.y)};
 
         // https://twitter.com/Stubbesaurus/status/937994790553227264
         const float t = max(-tmp.z, 0.0f);
@@ -87,7 +89,8 @@ public:
         return normalize(tmp);
     }
     __host__ __device__ NormVec3 operator=(const vec3 &n) {
-        return *this = NormVec3(n);
+        *this = NormVec3(n);
+        return *this;
     }
 private:
     glm::vec2 vec_{};

@@ -28,4 +28,6 @@ inline void notify_renderer_exit(){
 }
 
 __device__ inline material** CUDA_MATERIALS;
+
+inline material** HOST_MATERIALS;
 #endif //GLOBALS_CUH

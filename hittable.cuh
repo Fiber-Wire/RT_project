@@ -11,7 +11,6 @@ class material;
 
 class hit_record {
   public:
-    material* mat;
     float u;
     float v;
 
@@ -19,6 +18,7 @@ class hit_record {
     float t;
 
     bool front_face;
+    short mat_id;
 
     __host__ __device__ void set_face_normal(const ray& r, const vec3& outward_normal) {
         // Sets the hit record normal vector.
