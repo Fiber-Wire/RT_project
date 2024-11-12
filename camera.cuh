@@ -9,6 +9,7 @@
 
 class camera {
   public:
+    const bvh_tree *world;
     float aspect_ratio      = 1.0;  // Ratio of image width over height
     int    image_width       = 100;  // Rendered image width in pixel count
     int    samples_per_pixel = 10;   // Count of random samples for each pixel
@@ -22,7 +23,7 @@ class camera {
 
     float focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
-    void render(const bvh_tree& world) {
+    void render() {
         initialize();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
@@ -33,7 +34,7 @@ class camera {
                 color pixel_color(0,0,0);
                 for (int sample = 0; sample < samples_per_pixel; sample++) {
                     ray r = get_ray(i, j, nullptr);
-                    pixel_color += ray_color(r, max_depth, &world, nullptr);
+                    pixel_color += ray_color(r, max_depth, nullptr);
                 }
                 write_color(std::cout, pixel_samples_scale * pixel_color);
             }
@@ -42,22 +43,22 @@ class camera {
         std::clog << "\rDone.                 \n";
     }
 
-    __host__ __device__ unsigned int render_pixel(const bvh_tree* world, int row_id, int col_id, curandState *rnd) const {
+    __host__ __device__ unsigned int render_pixel(int row_id, int col_id, curandState *rnd) const {
         color pixel_color(0,0,0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(col_id, row_id, rnd);
-            pixel_color += ray_color(r, max_depth, world, rnd);
+            pixel_color += ray_color(r, max_depth, rnd);
         }
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
     template <int thread_per_pixel>
-    __device__ unsigned int render_pixel(const bvh_tree* world, const int row_id, const int col_id, curandState *rnd,
+    __device__ unsigned int render_pixel(const int row_id, const int col_id, curandState *rnd,
                                          const int thread_index) const {
         color pixel_color(0,0,0);
         for (int sample = thread_index; sample < samples_per_pixel; sample+=thread_per_pixel) {
             ray r = get_ray(col_id, row_id, rnd);
-            pixel_color += ray_color(r, max_depth, world, rnd);
+            pixel_color += ray_color(r, max_depth, rnd);
         }
         __syncwarp();
         for (int shfl_dist = thread_per_pixel/2; shfl_dist>0; shfl_dist/=2) {
@@ -68,27 +69,37 @@ class camera {
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
-    void render(const bvh_tree& world, std::span<unsigned int> image) {
+    template <int thread_per_pixel>
+    __device__ color render_pixel_block(const int row_id, const int col_id, curandState *rnd) const {
+        color pixel_color(0,0,0);
+        for (int sample = 0; sample < samples_per_pixel/thread_per_pixel; sample++) {
+            ray r = get_ray(col_id, row_id, rnd);
+            pixel_color += ray_color(r, max_depth, rnd);
+        }
+        return pixel_samples_scale * pixel_color;
+    }
+
+    void render(std::span<unsigned int> image) {
         initialize();
 
         for (int j = 0; j < image_height; j++) {
             utils::log<utils::LogLevel::eVerbose>(
                 std::string{"Scanlines remaining: "} + std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
-                image[i+j*image_width] = render_pixel(&world, j, i, nullptr);
+                image[i+j*image_width] = render_pixel( j, i, nullptr);
             }
         }
     }
 
-    void render_parallel(const bvh_tree& world, std::span<unsigned int> image) {
+    void render_parallel(std::span<unsigned int> image) {
         initialize();
         int num_threads = std::thread::hardware_concurrency();
         std::vector<std::thread> threads{};
         for (auto tId = 0; tId < num_threads; tId++) {
-            threads.emplace_back([tId, num_threads, this, &image, &world]() {
+            threads.emplace_back([tId, num_threads, this, &image]() {
                 for (int j = tId; j < image_height; j+=num_threads) {
                     for (int i = 0; i < image_width; i++) {
-                        image[i+j*image_width] = render_pixel(&world, j, i, nullptr);
+                        image[i+j*image_width] = render_pixel(j, i, nullptr);
                     }
                 }
             });
@@ -162,40 +173,44 @@ class camera {
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
-    __host__ __device__ color ray_color(const ray& r, const int depth, const bvh_tree* world, curandState* rnd) const {
+    __host__ __device__ std::tuple<bool, vec3> ray_propagate(ray &cur_ray, curandState *rnd) const {
+        bool end = false;
+        hit_record rec;
+        color attenuation;
+        // If the ray hits nothing, return the background color.
+        if (!world->hit(cur_ray, interval(0.001f, infinity), rec)) {
+            end = true;
+            attenuation = background;
+        } else {
+#ifdef __CUDA_ARCH__
+            auto material_ptr = CUDA_MATERIALS;
+#else
+            auto material_ptr = HOST_MATERIALS;
+#endif
+            if (material_ptr[rec.mat_id]->will_scatter) {
+                NormVec3 scattered_direction;
+                attenuation = material_ptr[rec.mat_id]->scatter(cur_ray, rec, scattered_direction, rnd);
+                cur_ray = ray(cur_ray.at(rec.t), scattered_direction);
+            } else {
+                end = true;
+                attenuation = material_ptr[rec.mat_id]->emitted(rec.u, rec.v);
+            }
+        }
+        return std::make_tuple(end, attenuation);
+    }
+
+    __host__ __device__ color ray_color(const ray& r, int depth, curandState* rnd) const {
         ray cur_ray = r;
         auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
-        for(int i = 0; i < depth; i++) {
-            hit_record rec;
-
-            // If the ray hits nothing, return the background color.
-            if (!world->hit(cur_ray, interval(0.001f, infinity), rec))
-                return cur_attenuation * background;
-
-            NormVec3 scattered_direction;
-            color attenuation;
-
-#ifdef __CUDA_ARCH__
-            if (CUDA_MATERIALS[rec.mat_id]->will_scatter) {
-                attenuation = CUDA_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, scattered_direction, rnd);
-            } else {
-                color color_from_emission = CUDA_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
-                return cur_attenuation * color_from_emission;
-            }
-#else
-            if (HOST_MATERIALS[rec.mat_id]->will_scatter) {
-                attenuation = HOST_MATERIALS[rec.mat_id]->scatter(cur_ray, rec, scattered_direction, rnd);
-            } else {
-                color color_from_emission = HOST_MATERIALS[rec.mat_id]->emitted(rec.u, rec.v);
-                return cur_attenuation * color_from_emission;
-            }
-#endif
-
+        bool end=false;
+        while (depth > 0 && !end) {
+            vec3 attenuation;
+            depth -= 1;
+            std::tie(end, attenuation) = ray_propagate(cur_ray, rnd);
             cur_attenuation *= attenuation;
-            cur_ray = ray(cur_ray.at(rec.t), scattered_direction);
         }
         // If we've exceeded the ray bounce limit, no more light is gathered.
-        return color(0,0,0);
+        return end ? cur_attenuation : color(0,0,0);
     }
 };
 

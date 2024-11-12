@@ -74,6 +74,70 @@ namespace utils {
     }
 #ifdef __CUDACC__
 
+        /// thread id inside a thread block
+template <int blockDimCount = 1>
+__device__ unsigned int getBTId() {
+    static_assert(1<=blockDimCount && blockDimCount<=3, "blockDimCount must be in [1,3]");
+    auto tId = threadIdx.x;
+    if constexpr (blockDimCount>1) {
+        tId += threadIdx.y * blockDim.x;
+    }
+    if constexpr (blockDimCount>2) {
+        tId += threadIdx.z * blockDim.x * blockDim.y;
+    }
+    return tId;
+}
+    /// block id inside a grid
+template <int gridDimCount = 1>
+__device__ unsigned int getBId() {
+    static_assert(1<=gridDimCount && gridDimCount<=3, "gridDimCount must be in [1,3]");
+    auto bId = blockIdx.x;
+    if constexpr (gridDimCount>1) {
+        bId += blockIdx.y * gridDim.x;
+    }
+    if constexpr (gridDimCount>2) {
+        bId += blockIdx.z * gridDim.x * gridDim.y;
+    }
+    return bId;
+}
+    /// number of threads in a block
+    template <int blockDimCount = 1>
+    __device__ unsigned int getBlock() {
+    static_assert(1<=blockDimCount && blockDimCount<=3, "blockDimCount must be in [1,3]");
+    auto tBlockSize = blockDim.x;
+    if constexpr (blockDimCount>1) {
+        tBlockSize *= blockDim.y;
+    }
+    if constexpr (blockDimCount>2) {
+        tBlockSize *= blockDim.z;
+    }
+    return tBlockSize;
+}
+    /// thread id inside a grid
+template <int blockDimCount = 1, int gridDimCount = 1>
+__device__ unsigned int getTId() {
+    return getBTId<blockDimCount>() + getBId<gridDimCount>()*getBlock<blockDimCount>();
+}
+
+    /// number of blocks in a grid
+    template <int gridDimCount = 1>
+__device__ unsigned int getBGrid() {
+    static_assert(1<=gridDimCount && gridDimCount<=3, "gridDimCount must be in [1,3]");
+    auto gSize = gridDim.x;
+    if constexpr (gridDimCount>1) {
+        gSize *= gridDim.y;
+    }
+    if constexpr (gridDimCount>2) {
+        gSize *= gridDim.z;
+    }
+    return gSize;
+}
+    /// number of threads in a grid
+    template <int blockDimCount = 1, int gridDimCount = 1>
+__device__ unsigned int getGrid() {
+    return getBlock<blockDimCount>() * getBGrid<gridDimCount>();
+}
+
     /// helper function to check results of CUDA API calls, pause 1 sec and emit log if not cudaSuccess
     /// Usage: cu_ensure(cudaAPICall(...))
     inline void cu_ensure(
