@@ -65,6 +65,10 @@ class aabb {
             return y.size() > z.size() ? 1 : 2;
     }
 
+    __host__ __device__ point3 center() const{
+        return {x.centre(), y.centre(), z.centre()};
+    }
+
     __host__ __device__ static aabb empty() {
         return {interval::empty(),    interval::empty(),    interval::empty()};
     }
@@ -91,6 +95,17 @@ __host__ __device__ inline aabb operator+(const aabb& bbox, const vec3& offset) 
 
 __host__ __device__ inline aabb operator+(const vec3& offset, const aabb& bbox) {
     return bbox + offset;
+}
+inline __host__ __device__ aabb merge(const aabb& lhs, const aabb& rhs)
+{
+    aabb merged;
+    merged.x.max = ::fmaxf(lhs.x.max, rhs.x.max);
+    merged.y.max = ::fmaxf(lhs.y.max, rhs.y.max);
+    merged.z.max = ::fmaxf(lhs.z.max, rhs.z.max);
+    merged.x.min = ::fminf(lhs.x.min, rhs.x.min);
+    merged.y.min = ::fminf(lhs.y.min, rhs.y.min);
+    merged.z.min = ::fminf(lhs.z.min, rhs.z.min);
+    return merged;
 }
 
 

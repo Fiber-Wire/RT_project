@@ -66,6 +66,31 @@ __host__ __device__ inline vec3 refract(const vec3& uv, const vec3& n, const flo
     return r_out_perp + r_out_parallel;
 }
 
+/// https://github.com/Forceflow/libmorton/blob/7923faa88d7e564020b2d5d408bf8c186ecbe363/include/libmorton/morton3D.h#L105
+__host__ __device__ inline unsigned int spreadBits3D(unsigned int v) {
+    v = (v | (v << 16)) & 0x030000FF;  // Mask: 00000011 00000000 00000000 11111111
+    v = (v | (v << 8))  & 0x0300F00F;  // Mask: 00000011 00000000 11110000 00001111
+    v = (v | (v << 4))  & 0x030C30C3;  // Mask: 00000011 00001100 00110000 11000011
+    v = (v | (v << 2))  & 0x09249249;  // Mask: 00001001 00100100 10010010 01001001
+    return v;
+}
+
+__host__ __device__ inline unsigned int floatMapTo10bits(const float v, const interval size) {
+    return static_cast<unsigned int>(std::floorf((v - size.min) / size.size() * 1023.0f));
+}
+
+__host__ __device__ inline unsigned int mortonEncode3D(const point3 point, const interval sx, const interval sy, const interval sz) {
+    return spreadBits3D(floatMapTo10bits(point.x,sx)) |
+        spreadBits3D(floatMapTo10bits(point.y,sy)) << 1 |
+        spreadBits3D(floatMapTo10bits(point.z,sz)) << 2;
+}
+
+
+__device__ inline int common_upper_bits(const unsigned long long lhs, const unsigned long long rhs)
+{
+    return __clzll(lhs ^ rhs);
+}
+
 class NormVec3 {
 public:
     __host__ __device__ NormVec3() {}

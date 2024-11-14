@@ -4,6 +4,11 @@
 #include <curand_kernel.h>
 #include <limits>
 #include <random>
+#include "thrust/reduce.h"
+#include "thrust/unique.h"
+#include "thrust/scan.h"
+#include "thrust/execution_policy.h"
+#include "thrust/sort.h"
 
 // Constants
 
@@ -54,8 +59,6 @@ __host__ __device__ inline int random_int(int min, int max, curandState* rnd) {
 
     return distr(gen);
     #endif
-
-
 }
 
 

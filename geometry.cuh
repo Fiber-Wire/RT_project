@@ -161,17 +161,17 @@ __host__ __device__ inline hittable_list* create_box(const point3& a, const poin
     const auto dz = vec3(0, 0, max.z - min.z);
 
     quads->push({point3(min.x, min.y, max.z),  dx,  dy, mat_id}); // front
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
     quads->push({point3(max.x, min.y, max.z), -dz,  dy, mat_id}); // right
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
     quads->push({point3(max.x, min.y, min.z), -dx,  dy, mat_id}); // back
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
     quads->push({point3(min.x, min.y, min.z),  dz,  dy, mat_id}); // left
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
     quads->push({point3(min.x, max.y, max.z),  dx, -dz, mat_id}); // top
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
     quads->push({point3(min.x, min.y, min.z),  dx,  dz, mat_id}); // bottom
-    sides->add(quads->end());
+    sides->add(quads->end()-1);
 
     return sides;
 }

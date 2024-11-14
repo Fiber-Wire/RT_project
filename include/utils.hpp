@@ -222,7 +222,7 @@ __device__ unsigned int getGrid() {
             return data;
         }
         __host__ __device__ T* end() {
-            return data + count-1;
+            return data + count;
         }
 
         T* data{};

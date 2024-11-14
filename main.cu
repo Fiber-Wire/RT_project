@@ -18,71 +18,11 @@
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
 
-void cornell_box() {
-    hittable_list world{1000};
-    auto material_handles = new material*[4];
-    material_handles[0] = new lambertian(color(.65, .05, .05));
-    material_handles[1] = new lambertian(color(.73, .73, .73));
-    material_handles[2] = new lambertian(color(.12, .45, .15));
-    material_handles[3] = new diffuse_light(color(15, 15, 15));
-#ifdef __CUDA_ARCH__
-    CUDA_MATERIALS = material_handles;
-#else
-    HOST_MATERIALS = material_handles;
-#endif
-
-    auto quads_for_box = new utils::NaiveVector<quad>{12};
-
-    const auto red   = material_handles[0];
-    const auto white = material_handles[1];
-    const auto green = material_handles[2];
-    const auto light = material_handles[3];
-    const auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), 2);
-    const auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), 0);
-    const auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), 3);
-    const auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), 1);
-    const auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), 1);
-    const auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), 1);
-    world.add(quad_1);
-    world.add(quad_2);
-    world.add(quad_3);
-    world.add(quad_4);
-    world.add(quad_5);
-    world.add(quad_6);
-
-    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), 1,quads_for_box);
-    const auto box1_rotate = new rotate_y(box1,15);
-    const auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
-    world.add(box1_translate);
-
-    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), 1, quads_for_box);
-    const auto box2_rotate = new rotate_y(box2, -18);
-    const auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
-    world.add(box2_translate);
-
-    camera cam;
-
-    cam.aspect_ratio      = 1.0;
-    cam.image_width       = 600;
-    cam.samples_per_pixel = 200;
-    cam.max_depth         = 50;
-    cam.background        = color(0,0,0);
-
-    cam.vfov     = 40;
-    cam.lookfrom = point3(278, 278, -800);
-    cam.lookat   = point3(278, 278, 0);
-    cam.vup      = vec3(0,1,0);
-
-    auto world_bvh = bvh_tree(world);
-    cam.world = &world_bvh;
-    cam.render();
-}
-
 __host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_record* image_rd) {
     hittable_list world{8};
 
     // Geometry primitives
-    auto spheres = new utils::NaiveVector<sphere>{1005};
+    auto spheres = new utils::NaiveVector<sphere>{1029};
     auto quads = new utils::NaiveVector<quad>{2401};
 
     // Materials
@@ -124,7 +64,7 @@ __host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_re
 #endif
             auto z1 = z0 + w-0.1f;
 
-            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), short(0), quads);
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), 0, quads);
             boxes1.add(static_cast<hittable *>(box3));
         }
     }
@@ -134,27 +74,27 @@ __host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_re
     // 2nd
     auto light = material_handles[1];
     quads->push({point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), 1});
-    world.add(quads->end());
+    world.add(quads->end()-1);
 
     // 3rd
     auto dielectric_sphere = material_handles[2];
     spheres->push({point3(260, 150, 45), 50, 2});
-    world.add(spheres->end());
+    world.add(spheres->end()-1);
 
     //4th
     auto metal_sphere = material_handles[3];
     spheres->push({point3(0, 150, 145), 50, 3});
-    world.add(spheres->end());
+    world.add(spheres->end()-1);
 
     //5th
     auto dielectric_ground = material_handles[4];
     spheres->push({point3(360, 150, 145), 70, 4});
-    world.add(spheres->end());
+    world.add(spheres->end()-1);
 
     //6th
     auto lambertian_emat = material_handles[5];
     spheres->push({point3(400, 200, 400), 100, 5});
-    world.add(spheres->end());
+    world.add(spheres->end()-1);
 
     //7th
     int ns = 1000;
@@ -168,9 +108,10 @@ __host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_re
         auto center = get_rand_vec3(j);
 #endif
         spheres->push({center, 10, 6});
-        boxes2.add(spheres->end());
+        boxes2.add(spheres->end()-1);
     }
     auto bvh_node_box = new bvh_tree(boxes2);
+    //cudaDeviceSynchronize();
     auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
     auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
     world.add(bvh_node_box_translate);
@@ -178,7 +119,7 @@ __host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_re
     //8th
     auto metal_2 = material_handles[7];
     spheres->push({point3(240, 320, 400), 60, 7});
-    world.add(spheres->end());
+    world.add(spheres->end()-1);
 
     auto tree = new bvh_tree{world};
     return tree;
@@ -205,26 +146,6 @@ __host__ __device__ camera final_camera(const int image_width, const int samples
     cam.lookat   = point3(278, 278, 0);
     cam.vup      = vec3(0,1,0);
     return cam;
-}
-
-void render_scene(const bvh_tree &scene, camera &cam) {
-    cam.world = &scene;
-    cam.render();
-}
-
-void render_thread(camera &cam, const bvh_tree *scene, const std::span<unsigned int> image) {
-    while (!mainRendererComm.stop_render.load()) {
-        if (mainRendererComm.frame_start_render.try_acquire()) {
-            const auto r = cam.lookfrom-cam.lookat;
-            const auto tan_v = -normalize(cross(r, cam.vup));
-            constexpr auto dtheta = 0.1f;
-            cam.lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
-            cam.world = scene;
-            cam.render_parallel(image);
-            mainRendererComm.frame_rendered.release();
-        }
-        std::this_thread::yield();
-    }
 }
 
 __global__ void camera_init_cuda(camera* cam, bvh_tree** scene) {
@@ -286,48 +207,6 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cu
     cudaFree(imageGpuPtr);
 }
 
-void render_scene_realtime(bvh_tree *scene, camera &cam, const int &max_frame) {
-    cam.world = scene;
-    const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
-    auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
-    auto renderer = sdl_raii::Renderer{window.get()};
-    auto surface = sdl_raii::Surface{cam.image_width, height};
-    const auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
-    std::promise<void> render_finished;
-    const std::future<void> render_finished_future = render_finished.get_future();
-    std::thread{[=, &render_finished, &cam, &scene] {
-        render_thread(cam, scene, image);
-        render_finished.set_value_at_thread_exit();
-    }}.detach();
-    mainRendererComm.frame_start_render.release();
-    size_t frames = 0;
-    std::chrono::microseconds frame_times{};
-    auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
-    {
-        if (mainRendererComm.frame_rendered.try_acquire()) {
-            auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
-            SDL_RenderClear(renderer.get());
-            SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
-            SDL_RenderPresent(renderer.get());
-            auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
-            frames += 1;
-            frame_times += frame_time;
-            utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
-            mainRendererComm.frame_start_render.release();
-            t0 = std::chrono::steady_clock::now();
-        }
-        std::this_thread::yield();
-    }
-    utils::log("Total frames: "+std::to_string(frames)+
-               ", avg. frame time: "+std::to_string(frame_times.count()/frames/1e3)+" ms.");
-    notify_renderer_exit();
-    while(render_finished_future.wait_for(std::chrono::milliseconds{5})==std::future_status::timeout) {
-        want_exit_sdl();
-    }
-    render_finished_future.wait();
-}
-
 void render_scene_realtime_cuda(bvh_tree** scene, camera &cam, camera *cam_cuda, curandState* devStates, const int& max_frame) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
@@ -374,7 +253,7 @@ __global__ void initCurand(curandState *state, unsigned long seed){
     curand_init(seed, idx, 0, &state[idx]);
 }
 
-void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, std::string& device, int& frame) {
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame) {
     for (int i = 1; i < argc; i += 2) {
         if (std::string(argv[i]) == "--size") {
             size = std::atoi(argv[i + 1]);
@@ -382,9 +261,7 @@ void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth,
             samples = std::atoi(argv[i + 1]);
         } else if (std::string(argv[i]) == "--depth") {
             depth = std::atoi(argv[i + 1]);
-        } else if (std::string(argv[i]) == "--device") {
-            device = argv[i + 1];
-        }else if (std::string(argv[i]) == "--frame") {
+        } else if (std::string(argv[i]) == "--frame") {
             frame = std::atoi(argv[i + 1]);
         } else {
             std::cerr << "Usage: " << argv[0]
@@ -392,7 +269,6 @@ void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth,
                    "       --size: width of image in px\n"
                    "       --depth: maximum depth for rays\n"
                    "       --samples: number of samples per pixel\n"
-                   "       --device: device to use (cpu, gpu, default)\n"
                    "       --frame: non-stop when set to negative\n" << std::endl;
         }
     }
@@ -403,37 +279,24 @@ int main(int argc, char* argv[]) {
     initialize_main_sync_objs();
 
     int size = 400, samples = 32, depth = 4, frame = 62;
-    std::string device = "gpu";
-    parse_arguments(argc, argv, size, samples, depth, device, frame);
+    parse_arguments(argc, argv, size, samples, depth, frame);
     GRIDDIMS.x = size/BLOCKDIMS.y;
     GRIDDIMS.y = size/BLOCKDIMS.z;
 
     auto image_ld = image_loader("earthmap.jpg");
-    const auto rec = image_ld.get_record();
     auto cam = final_camera(size, samples, depth);
 
-    if (device == "default") {
-        const auto scene = final_scene_build(nullptr,&rec);
-        render_scene(*scene, cam);
-    } else {
-        if (device == "cpu") {
-            const auto scene = final_scene_build(nullptr,&rec);
-            render_scene_realtime(scene, cam, frame);
-        } else {
-            auto rec_cuda = image_ld.get_record_cuda();
-            const utils::CuArrayRAII image_rd{&rec_cuda};
-            const auto numThreads = GRIDDIMS.x * GRIDDIMS.y * GRIDDIMS.z * BLOCKDIMS.x * BLOCKDIMS.y * BLOCKDIMS.z;
-            const utils::CuArrayRAII<curandState> devStates{nullptr, numThreads};
-            // Cherry-picked seed
-            initCurand<<<GRIDDIMS,BLOCKDIMS>>>(devStates.cudaPtr, 1);
-            const utils::CuArrayRAII<bvh_tree*> sceneGpuPtr{nullptr};
-            const utils::CuArrayRAII camGpuPtr{&cam};
-            final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
-            cudaDeviceSynchronize();
-            utils::cu_check();
-            render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame);
-        }
-    }
+    auto rec_cuda = image_ld.get_record_cuda();
+    const utils::CuArrayRAII image_rd{&rec_cuda};
+    const auto numThreads = GRIDDIMS.x * GRIDDIMS.y * GRIDDIMS.z * BLOCKDIMS.x * BLOCKDIMS.y * BLOCKDIMS.z;
+    const utils::CuArrayRAII<curandState> devStates{nullptr, numThreads};
+    // Cherry-picked seed
+    initCurand<<<GRIDDIMS,BLOCKDIMS>>>(devStates.cudaPtr, 1);
+    const utils::CuArrayRAII<bvh_tree*> sceneGpuPtr{nullptr};
+    const utils::CuArrayRAII camGpuPtr{&cam};
+    final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
+    utils::cu_ensure(cudaDeviceSynchronize());
+    render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame);
     // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
     //cudaDeviceReset();
     return 0;
