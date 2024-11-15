@@ -40,7 +40,7 @@ namespace sdl_raii {
     };
     class Renderer: private utils::NonCopyable<Renderer> {
     public:
-        Renderer(SDL_Window* window) {
+        explicit Renderer(SDL_Window* window) {
             renderer_ = SDL_CreateRenderer(window, -1, 0);
         }
         ~Renderer() {
@@ -62,6 +62,7 @@ namespace sdl_raii {
                     width, height,
                     SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);// | SDL_WINDOW_FULLSCREEN);
             SDL_SetWindowResizable(window_, SDL_FALSE);
+            SDL_SetWindowAlwaysOnTop(window_, SDL_TRUE);
         }
         ~Window() {
             if (window_ != nullptr) {
@@ -91,29 +92,7 @@ namespace sdl_raii {
     };
 }
 
-// SDL_Window *init_sdl(int width, int height) {
-//     SDL_SetHint(SDL_HINT_VIDEO_HIGHDPI_DISABLED, "0");
-//     SDL_Init(SDL_INIT_VIDEO);
-//     //
-//     //SDL_Vulkan_LoadLibrary(nullptr);
-//     auto window = SDL_CreateWindow(
-//             "RT_project",
-//             SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-//             width, height,
-//             SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI);// | SDL_WINDOW_FULLSCREEN);
-//     SDL_SetWindowResizable(window, SDL_FALSE);
-//
-//     return window;
-// }
-//
-// void clean_sdl(SDL_Window *&window) {
-//     SDL_DestroyWindow(window);
-//     window = nullptr;
-//     //SDL_Vulkan_UnloadLibrary();
-//     SDL_Quit();
-// }
-
-bool want_exit_sdl() {
+inline bool want_exit_sdl() {
     SDL_Event sdlEvent;
     static bool bRet = false;
 
