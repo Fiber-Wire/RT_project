@@ -16,10 +16,6 @@ public:
     }
 
     __host__ __device__ explicit bvh_tree(hittable_list list) : bvh_tree(list.get_objects(), 0, list.count) {
-        // There's a C++ subtlety here. This constructor (without span indices) creates an
-        // implicit copy of the hittable list, which we will modify. The lifetime of the copied
-        // list only extends until this constructor exits. That's OK, because we only need to
-        // persist the resulting bounding volume hierarchy.
         printf("build bvh with %i objs, length %i\n", list.count, node_length);
     }
 
@@ -112,10 +108,10 @@ public:
                     stack_index += 1;
                     bvh_stack[stack_index] = current_node.left;
                 } else {
-                    const bool hit_left = get_hit(r, interval(ray_t.min, max_t), rec,
+                    const bool hit_leaf = get_hit(r, interval(ray_t.min, max_t), rec,
                                                   primitive_list[bvh_stack[stack_index + 1] - count + 1]);
-                    max_t = hit_left ? rec.t : max_t;
-                    is_hit = is_hit || hit_left;
+                    max_t = hit_leaf ? rec.t : max_t;
+                    is_hit = is_hit || hit_leaf;
                 }
             }
         }

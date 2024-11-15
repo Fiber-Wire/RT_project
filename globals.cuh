@@ -6,9 +6,9 @@
 #define GLOBALS_CUH
 /// Macros
 /// sample, x, y
-inline auto BLOCKDIMS = dim3(4, 4, 4);
+inline auto BLOCKDIMS = dim3(16, 2, 2);
 /// x, y
-inline auto GRIDDIMS = dim3(400/4, 400/4);
+inline auto GRIDDIMS = dim3(400/2, 400/2);
 #include "material.cuh"
 
 /// Synchronization between main and render thread

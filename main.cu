@@ -163,7 +163,7 @@ __global__ void camera_init_cuda(camera* cam, bvh_tree** scene) {
 __global__ void camera_render_cuda(const camera* cam, std::span<unsigned int> image, curandState* devStates) {
     const auto tid = utils::getTId<3, 2>();
     // only use 1, 2, 4, ..., 32
-    constexpr auto threadPerPixel = 4;
+    constexpr auto threadPerPixel = 16;
     //static_assert(threadPerPixel<=BLOCKDIMS.x);
 
     auto devState = devStates[tid];
