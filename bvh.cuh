@@ -97,7 +97,7 @@ public:
     friend __global__ void bvh_rebuild(bvh_tree &obj);
 
     __host__ __device__ bool hit(const ray &r, const interval ray_t, hit_record &rec) const {
-        int bvh_stack[10];
+        int bvh_stack[11];
         int stack_index = 0;
         bvh_stack[stack_index] = 0;
         bool is_hit = false;
@@ -106,15 +106,14 @@ public:
             const auto &current_node = leaf_list[bvh_stack[stack_index]];
             stack_index--;
             if (bbox_list[bvh_stack[stack_index + 1]].hit(r, interval(ray_t.min, max_t))) {
-                //if current_node is leaf node, left points to the obj_id, right is 0xFFFFFFFF
-                if (current_node.right != 0xFFFFFFFF) {
+                if (current_node.right != UINT_FAST32_MAX) {
                     stack_index += 1;
                     bvh_stack[stack_index] = current_node.right;
                     stack_index += 1;
                     bvh_stack[stack_index] = current_node.left;
                 } else {
                     const bool hit_left = get_hit(r, interval(ray_t.min, max_t), rec,
-                                                  primitive_list[current_node.left]);
+                                                  primitive_list[bvh_stack[stack_index + 1] - count + 1]);
                     max_t = hit_left ? rec.t : max_t;
                     is_hit = is_hit || hit_left;
                 }
@@ -128,11 +127,9 @@ public:
     struct bvh_node {
         unsigned int left{};
         unsigned int right{};
-        unsigned int parent_id{};
     };
 
 private:
-
     int count{0};
     hittable **primitive_list{nullptr};
     int node_length{0};
@@ -217,7 +214,7 @@ private:
     }
 
     __device__ static void construct_internal_nodes(bvh_node *internal_nodes, const unsigned long long *object_mortons,
-                                             const unsigned int num_objects) {
+                                             unsigned int *parent_ids, const unsigned int num_objects) {
         thrust::for_each(thrust::device,
                          thrust::make_counting_iterator<unsigned int>(0),
                          // number of internal nodes is one less than num_objects
@@ -230,15 +227,15 @@ private:
                              internal_nodes[idx].left = gamma;
                              internal_nodes[idx].right = gamma + 1;
                              //? range [low high]
-                             if (min(ij.x, ij.y) == gamma) {
+                             if (ij.x == gamma) {
                                  // last num_objects record the objects
                                  internal_nodes[idx].left += num_objects - 1;
                              }
-                             if (max(ij.x, ij.y) == gamma + 1) {
+                             if (ij.y == gamma + 1) {
                                  internal_nodes[idx].right += num_objects - 1;
                              }
-                             internal_nodes[internal_nodes[idx].left].parent_id = idx;
-                             internal_nodes[internal_nodes[idx].right].parent_id = idx;
+                             parent_ids[internal_nodes[idx].left] = idx;
+                             parent_ids[internal_nodes[idx].right] = idx;
                          });
     }
 };
@@ -275,20 +272,15 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
                                                 aabb_whole.z);
                       });
 
-    // TODO: remove indices if possible
-    auto indices = new unsigned int [obj.count];
-    thrust::copy(thrust::device, thrust::make_counting_iterator<unsigned int>(0),
-                 thrust::make_counting_iterator<unsigned int>(obj.count),
-                 indices);
-
     // keep indices ascending order
     thrust::stable_sort_by_key(thrust::device, morton, morton + obj.count,
                                thrust::make_zip_iterator(
-                                   thrust::make_tuple(obj.bbox_list + num_internal_nodes, indices)));
+                                   thrust::make_tuple(obj.bbox_list + num_internal_nodes, obj.primitive_list)));
 
     //extend mortonCode from 32 to 64  64 = morton obj_id
     const auto morton64 = new unsigned long long int[obj.count];
-    thrust::transform(thrust::device, morton, morton + obj.count, indices, morton64,
+    thrust::transform(thrust::device, morton, morton + obj.count,
+                            thrust::make_counting_iterator<unsigned int>(0), morton64,
                       [] __device__ (const unsigned int m, const unsigned int idx) {
                           unsigned long long int m64 = m;
                           m64 <<= 32;
@@ -298,31 +290,19 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
 
     // construct leaf nodes and aabbs
     constexpr bvh_tree::bvh_node default_node{
-        .left = 0xFFFFFFFF,
-        .right = 0xFFFFFFFF,
-        .parent_id = 0xFFFFFFFF
+        .left = UINT_FAST32_MAX,
+        .right = UINT_FAST32_MAX
     };
 
-    //set default value for internal nodes
+    auto parent_ids = new unsigned int [obj.node_length]{UINT_FAST32_MAX};
+    //set default value for all nodes
     thrust::fill(
         thrust::device,
         obj.leaf_list,
-        obj.leaf_list + num_internal_nodes,
+        obj.leaf_list + obj.node_length,
         default_node);
 
-    //init leaf nodes
-    thrust::transform(thrust::device, indices, indices + obj.count,
-                      obj.leaf_list + num_internal_nodes,
-                      [] __device__ (const unsigned int idx) {
-                          //if current_node is leaf node, left points to the obj_id, right is 0xFFFFFFFF
-                          return bvh_tree::bvh_node{
-                              .left = idx,
-                              .right = 0xFFFFFFFF,
-                              .parent_id = 0xFFFFFFFF
-                          };
-                      });
-
-    bvh_tree::construct_internal_nodes(obj.leaf_list, morton64, obj.count);
+    bvh_tree::construct_internal_nodes(obj.leaf_list, morton64, parent_ids, obj.count);
 
     const auto flags = new int[num_internal_nodes];
     const auto leaf_list = obj.leaf_list;
@@ -331,8 +311,8 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
                      thrust::make_counting_iterator<unsigned int>(num_internal_nodes),
                      thrust::make_counting_iterator<unsigned int>(obj.node_length),
                      [=] __device__ (const unsigned int idx) {
-                         unsigned int parent = leaf_list[idx].parent_id;
-                         while (parent != 0xFFFFFFFF) // means idx == 0
+                         unsigned int parent = parent_ids[idx];
+                         while (parent != UINT_FAST32_MAX) // means idx == 0
                          {
                              //lock in cuda
                              const int old = atomicCAS(flags + parent, 0, 1);
@@ -352,14 +332,14 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
                              bbox_list[parent] = merge(lbox, rbox);
 
                              // look the next parent...
-                             parent = leaf_list[parent].parent_id;
+                             parent = parent_ids[parent];
                          }
                      });
 
     delete[] morton;
     delete[] morton64;
-    delete[] indices;
     delete[] flags;
+    delete[] parent_ids;
 }
 
 #endif BVH_H

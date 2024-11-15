@@ -63,5 +63,5 @@ RT_project.exe
 ```
 Run with arguments for real-time display output:
 ```shell
-RT_project.exe --size <int> --depth <int> --samples <int> --device <string> --frame <int>
+RT_project.exe --size <int> --depth <int> --samples <int> --frame <int>
 ```
