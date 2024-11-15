@@ -135,39 +135,63 @@ private:
     int node_length{0};
     bvh_node *leaf_list{nullptr};
     aabb *bbox_list{nullptr};
-    __device__ static uint2 determine_range(const unsigned long long *object_mortons,
-                                            const unsigned int num_objects, unsigned int node_idx) {
-        if (node_idx == 0) {
-            return make_uint2(0, num_objects - 1);
-        }
 
-        // determine direction of the range
+    ///https://research.nvidia.com/sites/default/files/publications/karras2012hpg_paper.pdf
+    __device__ static bvh_node find_child(const unsigned long long *object_mortons,
+                                            const unsigned int num_objects, const unsigned int node_idx) {
+        unsigned int jdx;
+        int l = num_objects - 1;
+        int d = 1;
+        int t, i_tmp, delta, delta_min;
         const unsigned long long self_code = object_mortons[node_idx];
-        const int L_delta = common_upper_bits(self_code, object_mortons[node_idx - 1]);
-        const int R_delta = common_upper_bits(self_code, object_mortons[node_idx + 1]);
-        const int d = (R_delta > L_delta) ? 1 : -1;
-        // Compute upper bound for the length of the range
-        // find the range of nodes that have the maximum same bits at the beginning using binary search[first <<1 then >>1]
-        const int delta_min = min(L_delta, R_delta);
-        int l_max = 2;
-        int delta = -1;
-        int i_tmp = node_idx + d * l_max;
-        if (0 <= i_tmp && i_tmp < num_objects) {
-            delta = common_upper_bits(self_code, object_mortons[i_tmp]);
+
+        if (node_idx == 0) {
+            jdx = num_objects - 1;
         }
-        while (delta > delta_min) {
-            l_max <<= 1;
-            i_tmp = node_idx + d * l_max;
+        else {
+            // determine direction of the range
+            const int L_delta = common_upper_bits(self_code, object_mortons[node_idx - 1]);
+            const int R_delta = common_upper_bits(self_code, object_mortons[node_idx + 1]);
+            d = (R_delta > L_delta) ? 1 : -1;
+            // Compute upper bound for the length of the range
+            delta_min = min(L_delta, R_delta);
+            int l_max = 2;
             delta = -1;
+            i_tmp = node_idx + d * l_max;
             if (0 <= i_tmp && i_tmp < num_objects) {
                 delta = common_upper_bits(self_code, object_mortons[i_tmp]);
             }
+            while (delta > delta_min) {
+                l_max <<= 1;
+                i_tmp = node_idx + d * l_max;
+                delta = -1;
+                if (0 <= i_tmp && i_tmp < num_objects) {
+                    delta = common_upper_bits(self_code, object_mortons[i_tmp]);
+                }
+            }
+
+            // Find the other end by binary search
+            l = 0;
+            t = l_max >> 1;
+            while (t > 0) {
+                i_tmp = node_idx + (l + t) * d;
+                delta = -1;
+                if (0 <= i_tmp && i_tmp < num_objects) {
+                    delta = common_upper_bits(self_code, object_mortons[i_tmp]);
+                }
+                if (delta > delta_min) {
+                    l += t;
+                }
+                t >>= 1;
+            }
+            jdx = node_idx + l * d;
         }
 
-        // Find the other end by binary search
-        int l = 0;
-        int t = l_max >> 1;
-        while (t > 0) {
+        //binary find split gamma
+        t = (l + 1)/2;
+        l = 0;
+        delta_min = common_upper_bits(self_code, object_mortons[jdx]);
+        while (t > 1) {
             i_tmp = node_idx + (l + t) * d;
             delta = -1;
             if (0 <= i_tmp && i_tmp < num_objects) {
@@ -176,41 +200,26 @@ private:
             if (delta > delta_min) {
                 l += t;
             }
-            t >>= 1;
-        }
-        unsigned int jdx = node_idx + l * d;
-        if (d < 0) {
-            thrust::swap(node_idx, jdx); // make it sure that idx < jdx
+            t = (t + 1)/2;
         }
 
-        return make_uint2(node_idx, jdx);
-    }
-
-    __device__ static unsigned int find_split(const unsigned long long *node_code,
-                                              const unsigned int first, const unsigned int last) {
-        const unsigned long long first_code = node_code[first];
-        const unsigned long long last_code = node_code[last];
-        if (first_code == last_code) {
-            return (first + last) >> 1;
+        i_tmp = node_idx + (l + t) * d;
+        delta = -1;
+        if (0 <= i_tmp && i_tmp < num_objects) {
+            delta = common_upper_bits(self_code, object_mortons[i_tmp]);
         }
-        //first and last have the least common bits
-        const int delta_node = common_upper_bits(first_code, last_code);
+        if (delta > delta_min) {
+            l += t;
+        }
 
-        // binary search
-        int split = first;
-        int stride = last - first;
-        do {
-            stride = (stride + 1) >> 1;
-            const int middle = split + stride;
-            if (middle < last) {
-                const int delta = common_upper_bits(first_code, node_code[middle]);
-                if (delta > delta_node) {
-                    split = middle;
-                }
-            }
-        } while (stride > 1);
+        const int gamma = node_idx + l * d + min(d,0);
 
-        return split;
+        unsigned int left = gamma;
+        if(min(node_idx, jdx) == gamma) left += num_objects - 1;
+        unsigned int right = gamma + 1;
+        if (max(node_idx, jdx) == gamma + 1) right += num_objects - 1;
+
+        return {left, right};
     }
 
     __device__ static void construct_internal_nodes(bvh_node *internal_nodes, const unsigned long long *object_mortons,
@@ -220,20 +229,8 @@ private:
                          // number of internal nodes is one less than num_objects
                          thrust::make_counting_iterator<unsigned int>(num_objects - 1),
                          [=] __device__ (const unsigned int idx) {
-                             const uint2 ij = determine_range(object_mortons, num_objects, idx);
-                             // binary search from the range
-                             const int gamma = find_split(object_mortons, ij.x, ij.y);
+                             internal_nodes[idx] = find_child(object_mortons, num_objects, idx);
 
-                             internal_nodes[idx].left = gamma;
-                             internal_nodes[idx].right = gamma + 1;
-
-                             if (ij.x == gamma) {
-                                 // last num_objects record the objects
-                                 internal_nodes[idx].left += num_objects - 1;
-                             }
-                             if (ij.y == gamma + 1) {
-                                 internal_nodes[idx].right += num_objects - 1;
-                             }
                              parent_ids[internal_nodes[idx].left] = idx;
                              parent_ids[internal_nodes[idx].right] = idx;
                          });
