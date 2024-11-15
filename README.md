@@ -52,15 +52,12 @@ cmake --build ./cmake-build-release --target RT_project -j 4
 The built program is found at `./cmake-build-release/RT_project.exe`
 
 ### Run
-Run with any arguments for `.ppm` output:
-```shell
-RT_project.exe --device default > render.ppm
-```
 
 Run with default arguments for real-time display output:
 ```shell
 RT_project.exe
 ```
+
 Run with arguments for real-time display output:
 ```shell
 RT_project.exe --size <int> --depth <int> --samples <int> --frame <int>

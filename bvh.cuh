@@ -106,7 +106,7 @@ public:
             const auto &current_node = leaf_list[bvh_stack[stack_index]];
             stack_index--;
             if (bbox_list[bvh_stack[stack_index + 1]].hit(r, interval(ray_t.min, max_t))) {
-                if (current_node.right != UINT_FAST32_MAX) {
+                if (current_node.right != 0xFFFFFFFF) {
                     stack_index += 1;
                     bvh_stack[stack_index] = current_node.right;
                     stack_index += 1;
@@ -226,7 +226,7 @@ private:
 
                              internal_nodes[idx].left = gamma;
                              internal_nodes[idx].right = gamma + 1;
-                             //? range [low high]
+
                              if (ij.x == gamma) {
                                  // last num_objects record the objects
                                  internal_nodes[idx].left += num_objects - 1;
@@ -290,11 +290,11 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
 
     // construct leaf nodes and aabbs
     constexpr bvh_tree::bvh_node default_node{
-        .left = UINT_FAST32_MAX,
-        .right = UINT_FAST32_MAX
+        .left = 0xFFFFFFFF,
+        .right = 0xFFFFFFFF
     };
 
-    auto parent_ids = new unsigned int [obj.node_length]{UINT_FAST32_MAX};
+    const auto parent_ids = new unsigned int [obj.node_length]{0xFFFFFFFF};
     //set default value for all nodes
     thrust::fill(
         thrust::device,
@@ -312,7 +312,7 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
                      thrust::make_counting_iterator<unsigned int>(obj.node_length),
                      [=] __device__ (const unsigned int idx) {
                          unsigned int parent = parent_ids[idx];
-                         while (parent != UINT_FAST32_MAX) // means idx == 0
+                         while (parent != 0xFFFFFFFF) // means idx == 0
                          {
                              //lock in cuda
                              const int old = atomicCAS(flags + parent, 0, 1);
