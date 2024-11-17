@@ -317,7 +317,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 3, frame = 62;
+    int size = 512, samples = 32, depth = 3, frame = 62;
     parse_arguments(argc, argv, size, samples, depth, frame);
 
     curandState *devStates;
