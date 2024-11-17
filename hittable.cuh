@@ -2,6 +2,7 @@
 #define HITTABLE_H
 
 #include "aabb.cuh"
+#include "color.cuh"
 #include "vec.cuh"
 #include "ray.cuh"
 
@@ -26,6 +27,96 @@ class hit_record {
         front_face = dot(vec3(r.direction()), outward_normal) < 0;
         normal = front_face ? outward_normal : -outward_normal;
     }
+};
+
+struct compressed_pxId {
+    unsigned short pxId{};
+    __host__ __device__ void set_pxId(const unsigned int col_id, const unsigned int row_id) {
+        pxId = (col_id & 0xff) | ((row_id & 0xff) << 8);
+    }
+    __host__ __device__ std::tuple<int, int> get_pixel_block_xy() const {
+        return std::make_tuple(pxId & 0xff, pxId >> 8);
+    }
+};
+
+struct ray_info {
+    ray r0{};
+    color pixel{};
+    short depth{};
+    short sampleId{};
+    compressed_pxId pxId{};
+
+    struct bounds {
+        __device__ explicit bounds(const ray_info& elem) {
+            const auto& origin = elem.r0.origin();
+            const auto& direction = elem.r0.direction().get_compressed();
+            ox.min = ox.max = origin.x;
+            oy.min = oy.max = origin.y;
+            oz.min = oz.max = origin.z;
+            dx.min = dx.max = direction.x;
+            dy.min = dy.max = direction.y;
+        }
+        __device__ bounds():
+        ox(interval::empty()), oy(interval::empty()), oz(interval::empty()),
+        dx(interval::empty()), dy(interval::empty()) {}
+        __device__ void add_point(const ray& ray) {
+            const auto& origin = ray.origin();
+            const auto& direction = ray.direction().get_compressed();
+            ox.add_point(origin.x);
+            oy.add_point(origin.y);
+            oz.add_point(origin.z);
+            dx.add_point(direction.x);
+            dy.add_point(direction.y);
+        }
+        __device__ static bounds merge_op(const bounds& a, const bounds& b) {
+            auto result = bounds{};
+            result.ox = {a.ox, b.ox};
+            result.oy = {a.oy, b.oy};
+            result.oz = {a.oz, b.oz};
+            result.dx = {a.dx, b.dx};
+            result.dy = {a.dy, b.dy};
+            return result;
+        }
+        interval ox, oy, oz;
+        interval dx, dy;
+    };
+    __device__ bool is_valid_ray() const {
+        return depth > 0;
+    }
+    __device__ bool is_pixel_ready() const {
+        return depth == -1;
+    }
+    __device__ void update_pixel_state(const bool end) {
+        if (depth == 0 || end) {
+            depth = -1;
+            pixel = end ? pixel : color{0.0f, 0.0f, 0.0f};
+        }
+    }
+    __device__ void retire() {
+        depth = -2;
+    }
+    // 6bits per component
+    // MSB: 0 if valid
+    // [0:29] dx dy z y x ...
+    static __device__ unsigned int get_morton(const ray_info & key, const bounds &b) {
+        const auto& origin = key.r0.origin();
+        const auto& direction = key.r0.direction().get_compressed();
+        const unsigned int r0x = static_cast<unsigned int>((origin.x-b.ox.min)/(b.ox.max-b.ox.min) * 63.0f);
+        const unsigned int r0y = static_cast<unsigned int>((origin.y-b.oy.min)/(b.oy.max-b.oy.min) * 63.0f);
+        const unsigned int r0z = static_cast<unsigned int>((origin.z-b.oz.min)/(b.oz.max-b.oz.min) * 63.0f);
+        const unsigned int r0dx = static_cast<unsigned int>((direction.x-b.dx.min)/(b.dx.max-b.dx.min) * 63.0f);
+        const unsigned int r0dy = static_cast<unsigned int>((direction.y-b.dy.min)/(b.dy.max-b.dy.min) * 63.0f);
+        return (spreadBits5D(r0dx) << 4) | (spreadBits5D(r0dy) << 3) |
+            (spreadBits5D(r0z) << 2) | (spreadBits5D(r0y) << 1) | (spreadBits5D(r0x)) | (key.is_valid_ray() ? 0x0 : 0x80000000);
+    }
+    static __device__ unsigned int spreadBits5D(unsigned int x) {
+        x &= 0x3f;
+        x = (x | (x << 16)) & 0x30000f;
+        x = (x | (x << 8)) & 0x300c03;
+        x = (x | (x << 4)) & 0x2108421;
+        return x;
+    }
+
 };
 
 enum class hit_type {

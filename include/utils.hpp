@@ -168,12 +168,14 @@ __device__ unsigned int getGrid() {
             if (src != nullptr) {
                 cu_ensure(cudaMemcpy(cudaPtr, src, sizeof(T) * n, cudaMemcpyHostToDevice));
             }
+            cudaView = {cudaPtr, n};
         }
         ~CuArrayRAII() {
             cudaFree(cudaPtr);
         }
         T* cudaPtr{};
         size_t n;
+        std::span<T> cudaView;
     };
 
     template <class T>

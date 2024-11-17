@@ -160,37 +160,61 @@ __global__ void camera_init_cuda(camera* cam, bvh_tree** scene) {
     }
 }
 
-__global__ void camera_render_cuda(const camera* cam, std::span<unsigned int> image, curandState* devStates) {
+template<int threadPerPixel = blkx_t>
+__global__ void camera_render_cuda(const camera* cam, std::span<color> output_samples,
+    curandState* devStates) {
     const auto tid = utils::getTId<3, 2>();
-    // only use 1, 2, 4, ..., 32
-    constexpr auto threadPerPixel = 16;
-    //static_assert(threadPerPixel<=BLOCKDIMS.x);
+    const auto bTId = utils::getBTId<3>();
+    __shared__ block_ray_query_container<> shared_comms;
+    constexpr auto shared_size = sizeof(shared_comms);
+
+    __syncthreads();
 
     auto devState = devStates[tid];
-    const auto width = cam->image_width;
-    const auto height = image.size()/width;
+    constexpr auto img_width = width_t;
+    constexpr auto img_height = height_t;
 
-    for (int y = threadIdx.z + blockIdx.y*blockDim.z; y < height; y += blockDim.z*gridDim.y) {
-        for (int x = threadIdx.y + blockIdx.x*blockDim.y; x < width; x += blockDim.y*gridDim.x) {
-            auto pixel_sampled_result = cam->render_pixel_block<threadPerPixel>(y, x, &devState);
-            __syncwarp(utils::tId_to_warp_mask<threadPerPixel>(tid));
-            for (int shfl_dist = threadPerPixel/2; shfl_dist>0; shfl_dist/=2) {
-                pixel_sampled_result.x += __shfl_xor_sync(utils::tId_to_warp_mask<threadPerPixel>(tid), pixel_sampled_result.x, shfl_dist);
-                pixel_sampled_result.y += __shfl_xor_sync(utils::tId_to_warp_mask<threadPerPixel>(tid), pixel_sampled_result.y, shfl_dist);
-                pixel_sampled_result.z += __shfl_xor_sync(utils::tId_to_warp_mask<threadPerPixel>(tid), pixel_sampled_result.z, shfl_dist);
+    for (int y = threadIdx.z + blockIdx.y*blockDim.z; y < img_height; y += blockDim.z*gridDim.y) {
+        for (int x = threadIdx.y + blockIdx.x*blockDim.y; x < img_width; x += blockDim.y*gridDim.x) {
+            if (bTId==0) {
+                shared_comms.reset();
             }
-            if (threadIdx.x == 0) {
-                image[x+y*width] = pixel_from_color(pixel_sampled_result);
-            }
+            __syncthreads();
+            cam->render_pixel_block<threadPerPixel>(
+                y, x,
+                &shared_comms,
+                output_samples.data(),
+                &devState);
         }
     }
-
     devStates[tid] = devState;
+}
+__global__ void merge_samples_cuda(const camera* cam, std::span<color> input_samples, std::span<unsigned int> output_image) {
+    constexpr auto threadPerPixel = 32;
+    const auto width = cam->image_width;
+    const auto height = output_image.size()/width;
+    for (int y = blockIdx.y; y < height; y += gridDim.y) {
+        for (int x = blockIdx.x; x < width; x += gridDim.x) {
+            // Specialize WarpReduce for type int
+            using WarpReduce = cub::WarpReduce<color>;
+
+            // Allocate WarpReduce shared memory for 4 warps
+            __shared__ typename WarpReduce::TempStorage temp_storage;
+
+            // Return the warp-wide sums to each lane0 (threads 0, 32, 64, and 96)
+            color aggregate = WarpReduce(temp_storage).Sum(input_samples[threadIdx.x+threadPerPixel*(x+y*width)]);
+            if (threadIdx.x == 0) {
+                output_image[x+y*width] = pixel_from_color(aggregate/static_cast<float>(cam->samples_per_pixel));
+            }
+            __syncthreads();
+        }
+    }
 }
 
 void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     const int width  = cam.image_width;
+    utils::CuArrayRAII<color> dev_samples{nullptr, image.size()*cam.samples_per_pixel};
     unsigned int* imageGpuPtr{};
     cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
     //utils::cu_ensure(cudaFuncSetCacheConfig(camera_render_cuda, cudaFuncCachePreferL1));
@@ -198,7 +222,8 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cu
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             camera_init_cuda<<<1,1>>>(cam_cuda, scene_cuda);
-            camera_render_cuda<<<GRIDDIMS,BLOCKDIMS>>>(cam_cuda, imageGpu, devStates);
+            camera_render_cuda<<<GRIDDIMS,BLOCKDIMS>>>(cam_cuda, dev_samples.cudaView, devStates);
+            merge_samples_cuda<<<GRIDDIMS, 32>>>(cam_cuda, dev_samples.cudaView, imageGpu);
             utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
         }
@@ -280,7 +305,9 @@ int main(int argc, char* argv[]) {
 
     int size = 400, samples = 32, depth = 4, frame = 62;
     parse_arguments(argc, argv, size, samples, depth, frame);
+    size = width_t; samples = samplePPx_t;
     GRIDDIMS.x = size/BLOCKDIMS.y;
+
     GRIDDIMS.y = size/BLOCKDIMS.z;
 
     auto image_ld = image_loader("earthmap.jpg");

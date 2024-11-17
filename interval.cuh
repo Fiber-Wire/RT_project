@@ -43,6 +43,11 @@ class interval {
         return interval(min - padding, max + padding);
     }
 
+    __host__ __device__ void add_point(const float x) {
+        min = fmin(x, min);
+        max = fmax(x, max);
+    }
+
     __host__ __device__ static interval empty() {
         return {+infinity, -infinity};
     }

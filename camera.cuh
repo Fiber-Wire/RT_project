@@ -6,6 +6,117 @@
 #include <span>
 #include <utils.hpp>
 
+using RayInfo = ray_info;
+using BlockReduceBounds = cub::BlockReduce<RayInfo::bounds, blkx_t, cub::BLOCK_REDUCE_WARP_REDUCTIONS, blky_t, blkz_t>;
+using BlockSortMorton = cub::BlockRadixSort<
+        // KeyT, blkx, numPerThread, ValT
+        unsigned int, blkx_t, numRays_t, RayInfo,
+        // default params
+        4, true, cub::BLOCK_SCAN_WARP_SCANS, cudaSharedMemBankSizeFourByte,
+        // blky, blkz
+        blky_t, blkz_t>;
+using BlockReduceRayCount = cub::BlockReduce<int, blkx_t, cub::BLOCK_REDUCE_WARP_REDUCTIONS, blky_t, blkz_t>;
+template <int samples=samplePPx_t>
+struct block_ray_query_container {
+    struct bounds_container {
+        BlockReduceBounds::TempStorage bound_temp;
+        RayInfo::bounds block_bounds_temp;
+        __device__ bounds_container() {}
+    };
+    struct finished_container {
+        BlockReduceRayCount::TempStorage finish_storage;
+        bool finished{};
+        __device__ finished_container() {}
+    };
+    union block_comms {
+        BlockSortMorton::TempStorage morton_temp;
+        finished_container finished_temp;
+        bounds_container bounds_temp;
+        __device__ block_comms() {}
+    };
+    block_comms comms;
+    short num_samples[blky_t*blkz_t];
+    __device__ block_ray_query_container() {}
+    __device__ void reset() {
+        for (auto &n : num_samples) {
+            n = samples;
+        }
+    }
+
+    __device__ short request_samples(int &req) {
+        const auto mask = utils::tId_to_warp_mask<blkx_t>(utils::getBTId<3>());
+        const auto bTId_offset = utils::getBTId<3>()-utils::getBTId<1>();
+        short first = samples;
+        __syncwarp(mask);
+        auto& s = num_samples[threadIdx.y+threadIdx.z*blky_t];
+        for (int i=0; i<blkx_t; i++) {
+            int req_i = __shfl_sync(mask, req, (i+bTId_offset)%32);
+            short first_i = samples-s;
+            if (threadIdx.x == 0) {
+                if (req_i > s) {
+                    req_i = s;
+                    s = 0;
+                } else {
+                    s -= req_i;
+                }
+            }
+            const int res_i = __shfl_sync(mask, req_i, bTId_offset%32);
+            if (threadIdx.x == i) {
+                req = res_i;
+                first = first_i;
+            }
+        }
+        return first;
+    }
+
+    __device__ bool block_finished(int valid_rays) {
+        auto& finish_storage = comms.finished_temp.finish_storage;
+        auto& finished = comms.finished_temp.finished;
+        valid_rays = BlockReduceRayCount(finish_storage).Sum(valid_rays);
+        if (utils::getBTId<3>()==0) {
+            if (valid_rays > 0) {
+                finished = false;
+            } else {
+                bool finished_i = true;
+                for (const auto& s: num_samples) {
+                    finished_i &= (s ==0);
+                }
+                finished = finished_i;
+            }
+        }
+        __syncthreads();
+        return finished;
+    }
+    __device__ RayInfo::bounds find_ray_bounds(RayInfo rays[]) {
+        auto& bound_temp = comms.bounds_temp.bound_temp;
+        auto& block_bounds = comms.bounds_temp.block_bounds_temp;
+        RayInfo::bounds result{};
+        for (int i = 0; i<numRays_t; i++) {
+            if (rays[i].is_valid_ray()) {
+                result.add_point(rays[i].r0);
+            }
+        }
+
+        result = BlockReduceBounds(bound_temp).Reduce(
+            result, []__device__ (const RayInfo::bounds &a, const RayInfo::bounds &b) {
+            return RayInfo::bounds::merge_op(a, b);
+        });
+        block_bounds = result;
+        __syncthreads();
+        return block_bounds;
+    }
+    __device__ void block_morton_sort(RayInfo (&local_rays)[numRays_t], const RayInfo::bounds &bound) {
+        unsigned int local_mortons[numRays_t];
+        //auto bound = comms.bounds_temp.block_bounds_temp;
+        for (int i = 0; i < numRays_t; i++) {
+            local_mortons[i] = RayInfo::get_morton(local_rays[i], bound);
+        }
+        //__syncthreads();
+        BlockSortMorton(comms.morton_temp).SortBlockedToStriped(local_mortons, local_rays);
+    }
+
+};
+
 
 class camera {
   public:
@@ -69,15 +180,92 @@ class camera {
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
-    template <int thread_per_pixel>
-    __device__ color render_pixel_block(const int row_id, const int col_id, curandState *rnd) const {
-        color pixel_color(0,0,0);
-        for (int sample = 0; sample < samples_per_pixel/thread_per_pixel; sample++) {
-            ray r = get_ray(col_id, row_id, rnd);
-            pixel_color += ray_color(r, max_depth, rnd);
-        }
-        return pixel_samples_scale * pixel_color;
+    template <int thread_per_pixel, int samples=samplePPx_t>
+__device__ void render_pixel_block(const int row_id, const int col_id,
+    block_ray_query_container<samples> *block_comms,
+    color *output_samples,
+    curandState *rnd) const {
+    const auto bTId = utils::getBTId<3>();
+    int numSample = samples/thread_per_pixel;
+    constexpr int numPx = blky_t*blkz_t;
+    RayInfo local_rays[numRays_t];
+    for (auto& r: local_rays) {
+        r.retire();
     }
+    int requested_samples = numRays_t;
+
+    do {
+        // printf("Block {%d, %d} Thread (%d, %d, %d): request: %d samples\n",
+        //     blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+        //     requested_samples);
+        auto sid_first = block_comms->request_samples(requested_samples);
+        if (sid_first+requested_samples> samples) {
+            printf("Block {%d, %d} Thread (%d, %d, %d): allowed: %d samples, starting at %d\n",
+            blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+            requested_samples, sid_first);
+        }
+        int ray_counter = 0;
+        while (requested_samples > 0 && ray_counter < numRays_t) {
+            if (auto &r_info = local_rays[ray_counter]; !r_info.is_valid_ray()) {
+                r_info.pixel = color(1.0f, 1.0f, 1.0f);
+                r_info.r0 = get_ray(col_id, row_id, rnd);
+                r_info.pxId.set_pxId(col_id%blky_t, row_id%blkz_t);
+                r_info.depth = max_depth;
+                r_info.sampleId = sid_first;
+                requested_samples -= 1;
+                sid_first += 1;
+                // if (blockIdx.x==0&& blockIdx.y==0&& threadIdx.x==0&& threadIdx.y==0&& threadIdx.z==0) {
+                //     printf("Block {%d, %d} Thread (%d, %d, %d): xy (%f, %f)\n",
+                // blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+                // r_info.r0.direction().get_compressed().x, r_info.r0.direction().get_compressed().y);
+                // }
+            }
+
+            ray_counter++;
+        }
+        const auto bound = block_comms->find_ray_bounds(local_rays);
+        // printf("Block {%d, %d} Thread (%d, %d, %d): bound for dx (%f, %f)\n",
+        //     blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+        //     bound.dx.min, bound.dx.max);
+        block_comms->block_morton_sort(local_rays, bound);
+
+
+        for (auto &r_info : local_rays) {
+            if (r_info.is_valid_ray()) {
+                bool ray_complete;
+                vec3 attenuation;
+                std::tie(ray_complete, attenuation) = ray_propagate(r_info.r0, rnd);
+                r_info.pixel *= attenuation;
+                r_info.depth -= 1;
+                r_info.update_pixel_state(ray_complete);
+            }
+        }
+
+        requested_samples = 0;
+        for (auto &r_info : local_rays) {
+            // if (blockIdx.x==0&& blockIdx.y==0&& threadIdx.x==0&& threadIdx.y==0&& threadIdx.z==0) {
+            //     printf("Block {%d, %d} Thread (%d, %d, %d): depth %d \n",
+            //         blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+            //         r_info.depth);
+            // }
+            if (!r_info.is_valid_ray()) {
+                if (r_info.is_pixel_ready()) {
+                    auto [x,y] = r_info.pxId.get_pixel_block_xy();
+                    x += col_id/blky_t*blky_t;
+                    y += row_id/blkz_t*blkz_t;
+                    // if (r_info.sampleId>samples) {
+                    //     printf("Block {%d, %d} Thread (%d, %d, %d): xy (%d, %d), sample %d\n",
+                    // blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+                    // x,y, r_info.sampleId);
+                    // }
+                    output_samples[r_info.sampleId+(x+y*width_t)*samples] = r_info.pixel;
+                    r_info.retire();
+                }
+                requested_samples += 1;
+            }
+        }
+    } while(!block_comms->block_finished(numRays_t-requested_samples));
+}
 
     void render(std::span<unsigned int> image) {
         initialize();
@@ -173,7 +361,7 @@ class camera {
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
 
-    __host__ __device__ std::tuple<bool, vec3> ray_propagate(ray &cur_ray, curandState *rnd) const {
+    __host__ __device__ std::tuple<bool, color> ray_propagate(ray &cur_ray, curandState *rnd) const {
         bool end = false;
         hit_record rec;
         color attenuation;

@@ -121,6 +121,9 @@ public:
         *this = NormVec3(n);
         return *this;
     }
+    __host__ __device__ const glm::vec2& get_compressed() const {
+        return vec_;
+    }
 private:
     /// 0<= vec_.xy <= 1
     glm::vec2 vec_{};
