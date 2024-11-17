@@ -2,6 +2,7 @@
 #include <semaphore>
 #include <string>
 #include <thread>
+#include "globals.cuh"
 #include "sdl_wrapper.hpp"
 #include "helpers.cuh"
 
@@ -15,8 +16,7 @@
 #include "curand.h"
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
-#define BLOCKDIM_X 64
-#define GRIDDIM_X (400*400/BLOCKDIM_X)
+
 struct MainRendererComm{
     std::binary_semaphore frame_start_render{0};
     std::binary_semaphore frame_rendered{0};
@@ -32,57 +32,40 @@ void notify_renderer_exit(){
     mainRendererComm.stop_render.store(true);
 }
 
-void cornell_box() {
-    hittable_list world{1000};
-    std::vector<material*> objects;
-
-    auto red   = new lambertian(color(.65, .05, .05));
-    auto white = new lambertian(color(.73, .73, .73));
-    auto green = new lambertian(color(.12, .45, .15));
-    auto light = new diffuse_light(color(15, 15, 15));
-    objects.push_back(red);
-    objects.push_back(white);
-    objects.push_back(green);
-    objects.push_back(light);
-    auto quad_1 = new quad(point3(555,0,0), vec3(0,555,0), vec3(0,0,555), green);
-    auto quad_2 = new quad(point3(0,0,0), vec3(0,555,0), vec3(0,0,555), red);
-    auto quad_3 = new quad(point3(343, 554, 332), vec3(-130,0,0), vec3(0,0,-105), light);
-    auto quad_4 = new quad(point3(0,0,0), vec3(555,0,0), vec3(0,0,555), white);
-    auto quad_5 = new quad(point3(555,555,555), vec3(-555,0,0), vec3(0,0,-555), white);
-    auto quad_6 = new quad(point3(0,0,555), vec3(555,0,0), vec3(0,555,0), white);
-
-    world.add(quad_1);
-    world.add(quad_2);
-    world.add(quad_3);
-    world.add(quad_4);
-    world.add(quad_5);
-    world.add(quad_6);
-
-    hittable_list* box1 = create_box(point3(0,0,0), point3(165,330,165), white);
-    auto box1_rotate = new rotate_y(box1,15);
-    auto box1_translate = new translate(box1_rotate, vec3(265,0,295));
-    world.add(box1_translate);
-
-    hittable_list* box2 = create_box(point3(0,0,0), point3(165,165,165), white);
-    auto box2_rotate = new rotate_y(box2, -18);
-    auto box2_translate = new translate(box2_rotate, vec3(130,0,65));
-    world.add(box2_translate);
-
-    camera cam;
-
-    cam.aspect_ratio      = 1.0;
-    cam.image_width       = 600;
-    cam.samples_per_pixel = 200;
-    cam.max_depth         = 50;
-    cam.background        = color(0,0,0);
-
-    cam.vfov     = 40;
-    cam.lookfrom = point3(278, 278, -800);
-    cam.lookat   = point3(278, 278, 0);
-    cam.vup      = vec3(0,1,0);
-
-    cam.render(world);
+__host__ __device__ hittable_list debug_scene_build(curandState* rnd) {
+    hittable_list boxes1{4};
+    auto ground = new lambertian(color(0.48, 0.83, 0.53));
+    hittable_list world{3};
+    int boxes_per_side = 2;
+    for (int i = 0; i < boxes_per_side; i++) {
+        for (int j = 0; j < boxes_per_side; j++) {
+            auto w = 800.0;
+            auto x0 = -1000.0 + i*w;
+            auto z0 = -1000.0 + j*w;
+            auto y0 = 0.0;
+            auto x1 = x0 + w;
+#ifdef __CUDA_ARCH__
+            auto y1 = random_float(1,101, rnd);
+#else
+            auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
+#endif
+            auto z1 = z0 + w;
+            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), ground);
+            boxes1.add(static_cast<hittable *>(box3));
+        }
+    }
+    auto bvh_node_boxes1 = new bvh_node{boxes1};
+    world.add(bvh_node_boxes1);
+    auto light = new diffuse_light(color(7, 7, 7));
+    world.add(new sphere{point3{123, 554, 147}, 100, light});
+    auto dielectric_sphere = new dielectric(1.5);
+    auto dielectric_sphere_1 = new sphere(point3(260, 150, 45), 50,dielectric_sphere);
+    world.add(dielectric_sphere_1);
+    hittable_list tree{1};
+    tree.add(new bvh_node{world});
+    return tree;
 }
+
 
 __host__ __device__ hittable_list final_scene_build(curandState* rnd, const image_record* image_rd) {
     hittable_list world{7};
@@ -158,7 +141,8 @@ __global__ void final_scene_build_cuda(bvh_node** world_ptr, curandState* states
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
         auto temp = new hittable_list{1};
-        *temp = final_scene_build(states,image_rd);
+        //*temp = final_scene_build(states,image_rd);
+        *temp = debug_scene_build(states);
         *world_ptr = static_cast<bvh_node *>(temp->get_objects()[0]);
     }
 }
@@ -193,14 +177,18 @@ void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned i
     }
 }
 
+__global__ void camera_init_cuda(camera* cam) {
+    const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        cam->initialize();
+    }
+}
+
 __global__ void camera_render_cuda(camera* cam, bvh_node** scenepptr, std::span<unsigned int> image, curandState* devStates) {
     auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
-    static_assert(threadPerPixel<=BLOCKDIM_X);
-    if (tid==0) {
-        cam->initialize();
-    }
+    //static_assert(threadPerPixel<=BLOCKDIMS.x);
     auto devState = devStates[tid];
     auto gridSize = blockDim.x * gridDim.x;
     auto width = cam->image_width;
@@ -222,7 +210,8 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_node** scene_cu
     std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
-            camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
+            camera_init_cuda<<<1,1>>>(cam_cuda);
+            camera_render_cuda<<<GRIDDIMS,BLOCKDIMS>>>(cam_cuda, scene_cuda, imageGpu, devStates);
             utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
         }
@@ -271,7 +260,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
-void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
+void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda, curandState* devStates, const int& max_frame) {
     int height = int(cam.image_width/cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -287,7 +276,7 @@ void render_scene_realtime_cuda(bvh_node** scene, camera &cam, camera *cam_cuda,
     size_t frames = 0;
     std::chrono::microseconds frame_times{};
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl())
+    while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -316,36 +305,54 @@ __global__ void initCurand(curandState *state, unsigned long seed){
     curand_init(seed, idx, 0, &state[idx]);
 }
 
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame) {
+    for (int i = 1; i < argc; i += 2) {
+        if (std::string(argv[i]) == "--size") {
+            size = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--samples") {
+            samples = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--depth") {
+            depth = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--frame") {
+            frame = std::atoi(argv[i + 1]);
+        } else {
+            std::cerr << "Usage: " << argv[0]
+                << " --size <int> --depth <int> --samples <int> --device <string>\n\n"
+                   "       --size: width of image in px\n"
+                   "       --depth: maximum depth for rays\n"
+                   "       --samples: number of samples per pixel\n"
+                   "       --frame: non-stop when set to negative\n" << std::endl;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
+    int size = 512, samples = 32, depth = 3, frame = 62;
+    parse_arguments(argc, argv, size, samples, depth, frame);
+
+    GRIDDIMS.x = size*size/BLOCKDIMS.x;
     auto image_ld = image_loader("earthmap.jpg");
     auto rec_cuda = image_ld.get_record_cuda();
     auto rec = image_ld.get_record();
     utils::CuArrayRAII image_rd{&rec_cuda};
 
-    utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIM_X*BLOCKDIM_X};
+    utils::CuArrayRAII<curandState> devStates{nullptr, GRIDDIMS.x*BLOCKDIMS.x};
     // Cherry-picked seed
-    initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates.cudaPtr, 1);
+    initCurand<<<GRIDDIMS,BLOCKDIMS>>>(devStates.cudaPtr, 1);
     utils::CuArrayRAII<bvh_node*> sceneGpuPtr{nullptr};
 
-    auto cam = final_camera(1600, 1024, 8);
+    auto cam = final_camera(size, samples, depth);
     utils::CuArrayRAII camGpuPtr{&cam};
-    if (argc!=1) {
-        auto scene = final_scene_build(nullptr,&rec);
-        render_scene(scene, cam);
-    } else {
-        if (false) {
-            auto scene = final_scene_build(nullptr,&rec);
-            render_scene_realtime(scene, cam);
-        } else {
-            final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
-            cudaDeviceSynchronize();
-            utils::cu_check();
-            render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr);
-        }
-    }
+
+    final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
+    cudaDeviceSynchronize();
+    utils::cu_check();
+    render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame);
+
+
     // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
     //cudaDeviceReset();
     return 0;
