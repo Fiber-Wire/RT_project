@@ -219,6 +219,13 @@ void render_scene(const hittable_list &scene, camera &cam) {
     cam.render(scene);
 }
 
+__global__ void camera_init_cuda(camera* cam) {
+    const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+    if (tid==0) {
+        cam->initialize();
+    }
+}
+
 void render_thread(camera &cam, const hittable_list &scene, std::span<unsigned int> image) {
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
@@ -233,10 +240,6 @@ __global__ void camera_render_cuda(camera* cam, hittable_list** scenepptr, std::
     // only use 1, 2, 4, ..., 32
     constexpr auto threadPerPixel = 32;
     static_assert(threadPerPixel<=BLOCKDIM_X);
-    if (tid==0) {
-        cam->initialize();
-    }
-    __syncthreads();
     auto gridSize = blockDim.x * gridDim.x;
     auto width = cam->image_width;
     auto scene = *scenepptr;
@@ -256,7 +259,7 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, hittable_list** sce
     std::span<unsigned int> imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire_for(std::chrono::milliseconds(5))) {
-            //cam.render_parallel(scene, image);
+            camera_init_cuda<<<1,1>>>(cam_cuda);
             camera_render_cuda<<<GRIDDIM_X,BLOCKDIM_X>>>(cam_cuda, scene_cuda, imageGpu, devStates);
             cudaDeviceSynchronize();
             cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost);
@@ -302,7 +305,7 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     render_finished_future.wait();
 }
 
-void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_cuda, curandState* devStates) {
+void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_cuda, curandState* devStates, const int& max_frame) {
     int height = int(cam.image_width/cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -315,8 +318,9 @@ void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_
         render_finished.set_value_at_thread_exit();
     }}.detach();
     mainRendererComm.frame_start_render.release();
+    size_t frames = 0;
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl())
+    while (!want_exit_sdl() && ((frames < max_frame) || (max_frame < 0)))
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -324,6 +328,7 @@ void render_scene_realtime_cuda(hittable_list** scene, camera &cam, camera *cam_
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
             SDL_RenderPresent(renderer.get());
             auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            frames += 1;
             utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
@@ -340,9 +345,33 @@ __global__ void initCurand(curandState *state, unsigned long seed){
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     curand_init(seed, idx, 0, &state[idx]);
 }
+
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame) {
+    for (int i = 1; i < argc; i += 2) {
+        if (std::string(argv[i]) == "--size") {
+            size = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--samples") {
+            samples = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--depth") {
+            depth = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--frame") {
+            frame = std::atoi(argv[i + 1]);
+        } else {
+            std::cerr << "Usage: " << argv[0]
+                << " --size <int> --depth <int> --samples <int> --device <string>\n\n"
+                   "       --size: width of image in px\n"
+                   "       --depth: maximum depth for rays\n"
+                   "       --samples: number of samples per pixel\n"
+                   "       --frame: non-stop when set to negative\n" << std::endl;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
+    int size = 400, samples = 32, depth = 3, frame = 62;
+    parse_arguments(argc, argv, size, samples, depth, frame);
     curandState *devStates;
     cudaMalloc(&devStates, GRIDDIM_X*BLOCKDIM_X*sizeof(curandState));
     initCurand<<<GRIDDIM_X,BLOCKDIM_X>>>(devStates, 1);
@@ -353,17 +382,11 @@ int main(int argc, char* argv[]) {
     debug_scene_build_cuda<<<1,1>>>(sceneGpuPtr, devStates);
     cudaDeviceSynchronize();
     utils::cu_check();
-    final_camera_cuda<<<1,1>>>(400, 32, 4, camGpuPtr);
+    final_camera_cuda<<<1,1>>>(size, samples, depth, camGpuPtr);
     cudaDeviceSynchronize();
     utils::cu_check();
-    auto scene = debug_scene_build(nullptr);
-    auto cam = final_camera(400, 32, 4);
-    if (argc!=1) {
-        render_scene(scene, cam);
-    } else {
-        //render_scene_realtime(scene, cam);
-        render_scene_realtime_cuda(sceneGpuPtr, cam, camGpuPtr, devStates);
-    }
+    auto cam = final_camera(size, samples, depth);
+    render_scene_realtime_cuda(sceneGpuPtr, cam, camGpuPtr, devStates, frame);
     cudaFree(sceneGpuPtr);
     cudaFree(camGpuPtr);
     cudaFree(devStates);
