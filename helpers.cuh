@@ -15,15 +15,16 @@
 
 constexpr float infinity = std::numeric_limits<float>::infinity();
 constexpr float pi = 3.1415926535897932385;
-constexpr int width_t = 400;
-constexpr int height_t = 400;
+constexpr int width_t = 512;
+constexpr int height_t = 512;
 constexpr int samplePPx_t = 32;
-constexpr int numRays_t = 2;
+constexpr int numRays_t = 1;
 constexpr int blkx_t = 2;
 constexpr int blky_t = 4;
 constexpr int blkz_t = 4;
-constexpr int grdx_t = width_t/blky_t;
-constexpr int grdy_t = height_t/blkz_t;
+constexpr int gridDimLimit = std::numeric_limits<unsigned char>::max()+1;
+constexpr int grdx_t = gridDimLimit/blky_t;
+constexpr int grdy_t = gridDimLimit/blkz_t;
 
 
 // Utility Functions

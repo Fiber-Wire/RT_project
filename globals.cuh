@@ -9,7 +9,7 @@
 /// sample, x, y
 inline auto BLOCKDIMS = dim3(blkx_t, blky_t, blkz_t);
 /// x, y
-inline auto GRIDDIMS = dim3(width_t/blky_t, height_t/blkz_t);
+inline auto GRIDDIMS = dim3(gridDimLimit/blky_t, gridDimLimit/blkz_t);
 #include "material.cuh"
 
 /// Synchronization between main and render thread

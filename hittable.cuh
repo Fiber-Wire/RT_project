@@ -42,9 +42,8 @@ struct compressed_pxId {
 struct ray_info {
     ray r0{};
     color pixel{};
-    short depth{};
-    short sampleId{};
-    compressed_pxId pxId{};
+    char2 dep_smp{};
+    uchar2 pxId{};
 
     struct bounds {
         __device__ explicit bounds(const ray_info& elem) {
@@ -81,19 +80,26 @@ struct ray_info {
         interval dx, dy;
     };
     __device__ bool is_valid_ray() const {
-        return depth > 0;
+        return dep_smp.x > 0;
     }
     __device__ bool is_pixel_ready() const {
-        return depth == -1;
+        return dep_smp.x == -1;
     }
     __device__ void update_pixel_state(const bool end) {
-        if (depth == 0 || end) {
-            depth = -1;
+        if (dep_smp.x == 0 || end) {
+            dep_smp.x = -1;
             pixel = end ? pixel : color{0.0f, 0.0f, 0.0f};
         }
     }
+    __device__ void set_px_offset(const int x, const int y) {
+        pxId.x = x;
+        pxId.y = y;
+    }
+    __host__ __device__ std::tuple<int, int> get_px_offset() const {
+        return std::make_tuple(pxId.x, pxId.y);
+    }
     __device__ void retire() {
-        depth = -2;
+        dep_smp.x = -2;
     }
     // 6bits per component
     // MSB: 0 if valid

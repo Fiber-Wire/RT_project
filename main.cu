@@ -161,7 +161,9 @@ __global__ void camera_init_cuda(camera* cam, bvh_tree** scene) {
 }
 
 template<int threadPerPixel = blkx_t>
-__global__ void camera_render_cuda(const camera* cam, std::span<color> output_samples,
+__global__ void camera_render_cuda(const camera* cam,
+    const int x_offsest, const int y_offset,
+    std::span<color> output_samples,
     curandState* devStates) {
     const auto tid = utils::getTId<3, 2>();
     const auto bTId = utils::getBTId<3>();
@@ -174,19 +176,15 @@ __global__ void camera_render_cuda(const camera* cam, std::span<color> output_sa
     constexpr auto img_width = width_t;
     constexpr auto img_height = height_t;
 
-    for (int y = threadIdx.z + blockIdx.y*blockDim.z; y < img_height; y += blockDim.z*gridDim.y) {
-        for (int x = threadIdx.y + blockIdx.x*blockDim.y; x < img_width; x += blockDim.y*gridDim.x) {
-            if (bTId==0) {
-                shared_comms.reset();
-            }
-            __syncthreads();
-            cam->render_pixel_block<threadPerPixel>(
-                y, x,
-                &shared_comms,
-                output_samples.data(),
-                &devState);
-        }
+    if (bTId==0) {
+        shared_comms.reset();
     }
+    __syncthreads();
+    cam->render_pixel_block<threadPerPixel>(
+        y_offset, x_offsest,
+        &shared_comms,
+        output_samples.data(),
+        &devState);
     devStates[tid] = devState;
 }
 __global__ void merge_samples_cuda(const camera* cam, std::span<color> input_samples, std::span<unsigned int> output_image) {
@@ -214,20 +212,39 @@ __global__ void merge_samples_cuda(const camera* cam, std::span<color> input_sam
 void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     const int width  = cam.image_width;
+    if (height%gridDimLimit!=0 || width%gridDimLimit!=0) {
+        utils::log_and_pause<utils::LogLevel::eErr>("Image dimensions must be multiples of 256.");
+        std::terminate();
+    }
+    std::vector<cudaStream_t> streams;
+    streams.resize(height/gridDimLimit*width/gridDimLimit);
+    for (auto& stream : streams) {
+        cudaStreamCreate(&stream);
+    }
     utils::CuArrayRAII<color> dev_samples{nullptr, image.size()*cam.samples_per_pixel};
     unsigned int* imageGpuPtr{};
     cudaMalloc(&imageGpuPtr, image.size()*sizeof(unsigned int));
-    //utils::cu_ensure(cudaFuncSetCacheConfig(camera_render_cuda, cudaFuncCachePreferL1));
     const std::span imageGpu{imageGpuPtr, static_cast<std::span<unsigned>::size_type>(height*width)};
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             camera_init_cuda<<<1,1>>>(cam_cuda, scene_cuda);
-            camera_render_cuda<<<GRIDDIMS,BLOCKDIMS>>>(cam_cuda, dev_samples.cudaView, devStates);
+            for (auto offset_y = 0; offset_y < height/gridDimLimit; offset_y++) {
+                for (auto offset_x = 0; offset_x < width/gridDimLimit; offset_x++) {
+                    camera_render_cuda<<<GRIDDIMS,BLOCKDIMS,0,streams[offset_x+offset_y*(width/gridDimLimit)]>>>(cam_cuda,
+                        offset_x*gridDimLimit, offset_y*gridDimLimit,
+                        dev_samples.cudaView, devStates);
+                }
+            }
             merge_samples_cuda<<<GRIDDIMS, 32>>>(cam_cuda, dev_samples.cudaView, imageGpu);
-            utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
+            utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr,
+                image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
         }
         std::this_thread::yield();
+    }
+    for (auto& stream : streams) {
+        cudaStreamDestroy(stream);
+        stream = nullptr;
     }
     cudaFree(imageGpuPtr);
 }
@@ -306,9 +323,9 @@ int main(int argc, char* argv[]) {
     int size = 400, samples = 32, depth = 4, frame = 62;
     parse_arguments(argc, argv, size, samples, depth, frame);
     size = width_t; samples = samplePPx_t;
-    GRIDDIMS.x = size/BLOCKDIMS.y;
+    GRIDDIMS.x = gridDimLimit/BLOCKDIMS.y;
 
-    GRIDDIMS.y = size/BLOCKDIMS.z;
+    GRIDDIMS.y = gridDimLimit/BLOCKDIMS.z;
 
     auto image_ld = image_loader("earthmap.jpg");
     auto cam = final_camera(size, samples, depth);
