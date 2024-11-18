@@ -22,9 +22,9 @@ constexpr int numRays_t = 1;
 constexpr int blkx_t = 2;
 constexpr int blky_t = 4;
 constexpr int blkz_t = 4;
-constexpr int gridDimLimit = std::numeric_limits<unsigned char>::max()+1;
-constexpr int grdx_t = gridDimLimit/blky_t;
-constexpr int grdy_t = gridDimLimit/blkz_t;
+constexpr int gridDimLimit = std::numeric_limits<unsigned char>::max() + 1;
+constexpr int grdx_t = gridDimLimit / blky_t;
+constexpr int grdy_t = gridDimLimit / blkz_t;
 
 
 // Utility Functions
@@ -33,43 +33,42 @@ __host__ __device__ inline float degrees_to_radians(const float degrees) {
     return degrees * pi / 180.0f;
 }
 
-__host__ __device__ inline float random_float(curandState* rnd) {
+__host__ __device__ inline float random_float(curandState *rnd) {
     // Returns a random real in [0,1).
-    #ifdef __CUDA_ARCH__
+#ifdef __CUDA_ARCH__
     return curand_uniform(rnd);
-    #else
+#else
     static thread_local std::random_device rd{};
     static thread_local std::mt19937 gen{rd()};
-    static thread_local std::uniform_real_distribution<float> distr{0,1};
+    static thread_local std::uniform_real_distribution<float> distr{0, 1};
     return distr(gen);
-    #endif
-
+#endif
 }
 
-__host__ __device__ inline float random_float(float min, float max, curandState* rnd) {
+__host__ __device__ inline float random_float(float min, float max, curandState *rnd) {
     // Returns a random real in [min,max).
-    #ifdef __CUDA_ARCH__
+#ifdef __CUDA_ARCH__
     return random_float(rnd)*(max-min)+min;
-    #else
+#else
     static thread_local std::random_device rd{};
     static thread_local std::mt19937 gen{rd()};
-    static thread_local std::uniform_real_distribution<float> distr{min,max};
+    static thread_local std::uniform_real_distribution<float> distr{min, max};
 
     return distr(gen);
-    #endif
+#endif
 }
 
-__host__ __device__ inline int random_int(int min, int max, curandState* rnd) {
+__host__ __device__ inline int random_int(int min, int max, curandState *rnd) {
     // Returns a random integer in [min,max].
-    #ifdef __CUDA_ARCH__
+#ifdef __CUDA_ARCH__
     return ceilf(curand_uniform(rnd) * (max-min+1)) + min-1;
-    #else
+#else
     static thread_local std::random_device rd{};
     static thread_local std::mt19937 gen{rd()};
-    static thread_local std::uniform_int_distribution<int> distr{min,max};
+    static thread_local std::uniform_int_distribution<int> distr{min, max};
 
     return distr(gen);
-    #endif
+#endif
 }
 
 
