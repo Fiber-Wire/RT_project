@@ -66,10 +66,10 @@ if (0)
 endif ()
 if (CMAKE_CUDA_COMPILER)
     if (CMAKE_BUILD_TYPE STREQUAL "Release")
-        target_compile_options(RT_project PRIVATE --extended-lambda --expt-relaxed-constexpr --use_fast_math -maxrregcount ${CUDA_MAXREG})
+        target_compile_options(RT_project PRIVATE --extended-lambda --expt-relaxed-constexpr -maxrregcount ${CUDA_MAXREG})
     else()
         target_compile_options(RT_project PRIVATE
-                --extended-lambda --expt-relaxed-constexpr --generate-line-info --use_fast_math -maxrregcount ${CUDA_MAXREG})
+                --extended-lambda --expt-relaxed-constexpr --generate-line-info -maxrregcount ${CUDA_MAXREG})
     endif()
 
 endif ()

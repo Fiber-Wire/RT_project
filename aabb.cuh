@@ -96,8 +96,7 @@ __host__ __device__ inline aabb operator+(const aabb& bbox, const vec3& offset) 
 __host__ __device__ inline aabb operator+(const vec3& offset, const aabb& bbox) {
     return bbox + offset;
 }
-inline __host__ __device__ aabb merge(const aabb& lhs, const aabb& rhs)
-{
+inline __host__ __device__ aabb merge(const aabb& lhs, const aabb& rhs) {
     aabb merged;
     merged.x.max = ::fmaxf(lhs.x.max, rhs.x.max);
     merged.y.max = ::fmaxf(lhs.y.max, rhs.y.max);

@@ -8,6 +8,7 @@
 #include "vec.cuh"
 
 #include "bvh.cuh"
+#include "bvh_builder.cuh"
 #include "camera.cuh"
 #include "hittable.cuh"
 #include "hittable_list.cuh"
@@ -18,117 +19,34 @@
 #include "curand_kernel.h"
 #include "pseudo_rnd.hpp"
 
-__host__ __device__ bvh_tree* final_scene_build(curandState* rnd, const image_record* image_rd) {
-    hittable_list world{8};
-
-    // Geometry primitives
-    auto spheres = new utils::NaiveVector<sphere>{1029};
-    auto quads = new utils::NaiveVector<quad>{2401};
-
-    // Materials
-    //   Textures needed by materials;
-    auto image_texture_emat = new image_texture(image_rd[0]);
-    auto material_handles = new material*[8];
-#ifdef __CUDA_ARCH__
+__device__ hittable_list* bvh_scene_build(curandState* rnd, const int num, utils::NaiveVector<sphere>** spheres_ptr) {
+    auto material_handles = new material*[2];
     CUDA_MATERIALS = material_handles;
-#else
-    HOST_MATERIALS = material_handles;
-#endif
-    material_handles[0] = new lambertian(color(0.48, 0.83, 0.53));
+    material_handles[0] = new lambertian(color(.73, .73, .73));
     material_handles[1] = new diffuse_light(color(7, 7, 7));
-    material_handles[2] = new dielectric(1.5);
-    material_handles[3] = new metal(color(0.8, 0.8, 0.9), 1.0);
-    material_handles[4] = new dielectric(1.5);
-    material_handles[5] = new lambertian(image_texture_emat);
-    material_handles[6] = new lambertian(color(.73, .73, .73));
-    material_handles[7] = new metal(color(212.0f/256, 175.0f/256, 55.0f/256), 0.025);
 
+    auto quads = new utils::NaiveVector<quad>{1};
 
-    // 1st item
-    auto ground = material_handles[0];
-    int boxes_per_side = 20;
-    hittable_list boxes1{boxes_per_side*boxes_per_side};
-    for (int i = 0; i < boxes_per_side; i++) {
-        for (int j = 0; j < boxes_per_side; j++) {
-            auto w = 100.0f;
-            auto x0 = -1000.0f + i*w;
-            auto z0 = -1000.0f + j*w;
-            auto y0 = 0.0f;
-            auto x1 = x0 + w-0.1f;
-            // Get identical scene between runs
-            // compute-sanitizer does not like what we do here
-#ifdef __CUDA_ARCH__
-            auto y1 = random_float(1,101, rnd);
-#else
-            auto y1 = get_rnd(i*boxes_per_side+j)*100+1;
-#endif
-            auto z1 = z0 + w-0.1f;
+    int ns = num;
+    auto spheres = new utils::NaiveVector<sphere>{ns};
 
-            auto box3 = create_box(point3(x0,y0,z0), point3(x1,y1,z1), 0, quads);
-            boxes1.add(static_cast<hittable *>(box3));
-        }
-    }
-    auto bvh_node_boxes1 = new bvh_tree{boxes1};
-    world.add(bvh_node_boxes1);
-
-    // 2nd
-    auto light = material_handles[1];
-    quads->push({point3(123, 554, 147), vec3(300, 0, 0), vec3(0, 0, 265), 1});
-    world.add(quads->end()-1);
-
-    // 3rd
-    auto dielectric_sphere = material_handles[2];
-    spheres->push({point3(260, 150, 45), 50, 2});
-    world.add(spheres->end()-1);
-
-    //4th
-    auto metal_sphere = material_handles[3];
-    spheres->push({point3(0, 150, 145), 50, 3});
-    world.add(spheres->end()-1);
-
-    //5th
-    auto dielectric_ground = material_handles[4];
-    spheres->push({point3(360, 150, 145), 70, 4});
-    world.add(spheres->end()-1);
-
-    //6th
-    auto lambertian_emat = material_handles[5];
-    spheres->push({point3(400, 200, 400), 100, 5});
-    world.add(spheres->end()-1);
-
-    //7th
-    int ns = 1000;
-    auto boxes2 = hittable_list{ns};
-    auto white = material_handles[6];
+    auto boxes2 = new hittable_list{ns + 1};
     for (int j = 0; j < ns; j++) {
-        // compute-sanitizer does not like what we do here
-#ifdef __CUDA_ARCH__
-        auto center = random_in_cube(0,165, rnd);
-#else
-        auto center = get_rand_vec3(j);
-#endif
-        spheres->push({center, 10, 6});
-        boxes2.add(spheres->end()-1);
+        auto center = point3(278,278,0) + random_in_cube(-100,100,rnd);
+        spheres->push({center, 5, 0});
+        boxes2->add(spheres->end()-1);
     }
-    auto bvh_node_box = new bvh_tree(boxes2);
-    //cudaDeviceSynchronize();
-    auto bvh_node_box_rotate_y = new rotate_y(bvh_node_box, 15);
-    auto bvh_node_box_translate = new translate(bvh_node_box_rotate_y, vec3(-100,270,395));
-    world.add(bvh_node_box_translate);
 
-    //8th
-    auto metal_2 = material_handles[7];
-    spheres->push({point3(240, 320, 400), 60, 7});
-    world.add(spheres->end()-1);
-
-    auto tree = new bvh_tree{world};
-    return tree;
+    quads->push({point3(278, 554, 0), vec3(300, 0, 0), vec3(0, 0, 265), 1});
+    boxes2->add(quads->end()-1);
+    *spheres_ptr = spheres;
+    return boxes2;
 }
 
-__global__ void final_scene_build_cuda(bvh_tree** world_ptr, curandState* states, const image_record* image_rd) {
+__global__ void bvh_scene_build_cuda(hittable_list** world_ptr, curandState* states, const int num, utils::NaiveVector<sphere>** sphere_vector) {
     const auto tid = blockIdx.x * blockDim.x + threadIdx.x;
     if (tid==0) {
-        *world_ptr = final_scene_build(states,image_rd);
+        *world_ptr = bvh_scene_build(states,num, sphere_vector);
     }
 }
 
@@ -188,7 +106,18 @@ __global__ void camera_render_cuda(const camera* cam, std::span<unsigned int> im
     devStates[tid] = devState;
 }
 
-void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cuda, std::span<unsigned int> image, curandState* devStates) {
+__global__ void spheres_motion(utils::NaiveVector<sphere>** spheres_ptr, curandState* devStates) {
+    const auto tid = utils::getTId<3, 2>();
+    const auto gsize = utils::getGrid<3,2>();
+    auto& spheres = *spheres_ptr;
+    for (auto sid = tid; sid < spheres->count; sid +=gsize) {
+        auto& s = spheres->data[sid];
+        s = sphere{s.bounding_box().center()+random_in_cube(-5, 5, devStates+tid), s.bounding_box().x.size()/2, 0};
+    }
+}
+
+void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cuda, std::span<unsigned int> image, curandState* devStates,
+    bvh_builder& builder, utils::CuArrayRAII<utils::NaiveVector<sphere>*>& spheres, const int parallel_build){
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     const int width  = cam.image_width;
     unsigned int* imageGpuPtr{};
@@ -198,6 +127,10 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cu
     while (!mainRendererComm.stop_render.load()) {
         if (mainRendererComm.frame_start_render.try_acquire()) {
             camera_init_cuda<<<1,1>>>(cam_cuda, scene_cuda);
+            spheres_motion<<<GRIDDIMS,BLOCKDIMS>>>(spheres.cudaPtr, devStates);
+            if(parallel_build == 1)
+                builder.update();
+            else builder.update_serial();
             camera_render_cuda<<<GRIDDIMS,BLOCKDIMS>>>(cam_cuda, imageGpu, devStates);
             utils::cu_ensure(cudaMemcpy(image.data(), imageGpuPtr, image.size()*sizeof(unsigned int), cudaMemcpyDeviceToHost));
             mainRendererComm.frame_rendered.release();
@@ -207,7 +140,9 @@ void render_thread_cuda(const camera& cam, camera* cam_cuda, bvh_tree** scene_cu
     cudaFree(imageGpuPtr);
 }
 
-void render_scene_realtime_cuda(bvh_tree** scene, camera &cam, camera *cam_cuda, curandState* devStates, const int& max_frame) {
+void render_scene_realtime_cuda(bvh_tree** scene, camera &cam, camera *cam_cuda, curandState* devStates,
+    const int max_frame, const int parallel_build,
+    bvh_builder& builder, utils::CuArrayRAII<utils::NaiveVector<sphere>*>& spheres) {
     const int height = static_cast<int>(cam.image_width / cam.aspect_ratio);
     auto window = sdl_raii::Window{"RT_project", cam.image_width, height};
     auto renderer = sdl_raii::Renderer{window.get()};
@@ -215,8 +150,8 @@ void render_scene_realtime_cuda(bvh_tree** scene, camera &cam, camera *cam_cuda,
     const auto image = std::span{static_cast<unsigned int *>(surface.get()->pixels), static_cast<size_t>(cam.image_width)*height};
     std::promise<void> render_finished;
     const std::future<void> render_finished_future = render_finished.get_future();
-    std::thread{[=, &render_finished, &cam, &scene] {
-        render_thread_cuda(cam, cam_cuda, scene, image, devStates);
+    std::thread{[=, &render_finished, &cam, &scene, &builder, &spheres] {
+        render_thread_cuda(cam, cam_cuda, scene, image, devStates, builder, spheres, parallel_build);
         render_finished.set_value_at_thread_exit();
     }}.detach();
     mainRendererComm.frame_start_render.release();
@@ -253,7 +188,7 @@ __global__ void initCurand(curandState *state, unsigned long seed){
     curand_init(seed, idx, 0, &state[idx]);
 }
 
-void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame) {
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame, int& obj_num, int &parallel_build) {
     for (int i = 1; i < argc; i += 2) {
         if (std::string(argv[i]) == "--size") {
             size = std::atoi(argv[i + 1]);
@@ -263,13 +198,19 @@ void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth,
             depth = std::atoi(argv[i + 1]);
         } else if (std::string(argv[i]) == "--frame") {
             frame = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--obj_num") {
+            obj_num = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--parallel_build") {
+            parallel_build = std::atoi(argv[i + 1]);
         } else {
             std::cerr << "Usage: " << argv[0]
-                << " --size <int> --depth <int> --samples <int> --device <string>\n\n"
+                << " --size <int> --depth <int> --samples <int> --frame <int> --obj_num <int> --parallel_build <int>\n\n"
                    "       --size: width of image in px\n"
                    "       --depth: maximum depth for rays\n"
                    "       --samples: number of samples per pixel\n"
-                   "       --frame: non-stop when set to negative\n" << std::endl;
+                   "       --frame: non-stop when set to negative\n"
+                   "       --obj_num: number of spheres generated\n"
+                   "       --parallel_build: 1 for parallel bvh building\n" << std::endl;
         }
     }
 }
@@ -278,25 +219,26 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = 62;
-    parse_arguments(argc, argv, size, samples, depth, frame);
+    int size = 400, samples = 32, depth = 4, frame = 62, obj_num = 1000, parallel_build = 1;
+    parse_arguments(argc, argv, size, samples, depth, frame, obj_num, parallel_build);
     GRIDDIMS.x = size/BLOCKDIMS.y;
     GRIDDIMS.y = size/BLOCKDIMS.z;
+    cudaDeviceSetLimit(cudaLimitMallocHeapSize, 1024<<20);
 
-    auto image_ld = image_loader("earthmap.jpg");
     auto cam = final_camera(size, samples, depth);
 
-    auto rec_cuda = image_ld.get_record_cuda();
-    const utils::CuArrayRAII image_rd{&rec_cuda};
     const auto numThreads = GRIDDIMS.x * GRIDDIMS.y * GRIDDIMS.z * BLOCKDIMS.x * BLOCKDIMS.y * BLOCKDIMS.z;
     const utils::CuArrayRAII<curandState> devStates{nullptr, numThreads};
     // Cherry-picked seed
     initCurand<<<GRIDDIMS,BLOCKDIMS>>>(devStates.cudaPtr, 1);
-    const utils::CuArrayRAII<bvh_tree*> sceneGpuPtr{nullptr};
     const utils::CuArrayRAII camGpuPtr{&cam};
-    final_scene_build_cuda<<<1,1>>>(sceneGpuPtr.cudaPtr, devStates.cudaPtr, image_rd.cudaPtr);
+    const utils::CuArrayRAII<hittable_list*> listGpuPtr{nullptr};
+    utils::CuArrayRAII<utils::NaiveVector<sphere>*> sphere_vector{nullptr};
+    bvh_scene_build_cuda<<<1,1>>>(listGpuPtr.cudaPtr, devStates.cudaPtr,obj_num, sphere_vector.cudaPtr);
     utils::cu_ensure(cudaDeviceSynchronize());
-    render_scene_realtime_cuda(sceneGpuPtr.cudaPtr, cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame);
+    bvh_builder builder(listGpuPtr.cudaPtr, obj_num + 1);
+
+    render_scene_realtime_cuda(builder.get_scene(), cam, camGpuPtr.cudaPtr, devStates.cudaPtr, frame, parallel_build, builder, sphere_vector);
     // we don't do the cleanup yet, but this will make compute-sanitizer unhappy
     //cudaDeviceReset();
     return 0;

@@ -60,5 +60,5 @@ RT_project.exe
 
 Run with arguments for real-time display output:
 ```shell
-RT_project.exe --size <int> --depth <int> --samples <int> --frame <int>
+RT_project.exe --size <int> --depth <int> --samples <int> --frame <int> --obj_num <int> --parallel_build <int>
 ```

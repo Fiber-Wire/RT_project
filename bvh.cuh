@@ -4,7 +4,7 @@
 #include "aabb.cuh"
 #include "hittable.cuh"
 #include "hittable_list.cuh"
-
+#include <cub/cub.cuh>
 #include <algorithm>
 
 class bvh_tree final : public hittable {
@@ -36,7 +36,7 @@ public:
             primitive_list[i] = objects[start + i];
         }
         bbox_list = new aabb[node_length];
-        bvh_rebuild<<<1,1>>>(*this);
+        //bvh_rebuild<<<1,1>>>(*this);
     }
 
     __host__ __device__ ~bvh_tree() override {
@@ -90,10 +90,8 @@ public:
         return *this;
     }
 
-    friend __global__ void bvh_rebuild(bvh_tree &obj);
-
     __host__ __device__ bool hit(const ray &r, const interval ray_t, hit_record &rec) const {
-        int bvh_stack[11];
+        int bvh_stack[22];
         int stack_index = 0;
         bvh_stack[stack_index] = 0;
         bool is_hit = false;
@@ -124,6 +122,51 @@ public:
         unsigned int left{};
         unsigned int right{};
     };
+
+    struct info {
+        unsigned int num_internal_nodes;
+
+        std::uint8_t* d_temp_storage_reduce1{};
+        std::size_t temp_storage_bytes_reduce1{};
+        aabb* reduce_out1{};
+
+        unsigned int *morton;
+        std::uint8_t* d_temp_storage_sort{};
+        std::size_t temp_storage_bytes_sort{};
+
+        unsigned int *morton_sorted;
+        hittable** primitive_list_sorted;
+
+        unsigned long long* morton64;
+        unsigned int *parent_ids;
+
+        int *flags;
+
+    };
+
+    struct aabb_merge
+    {
+        __device__ __forceinline__
+        aabb operator()(const aabb &a, const aabb &b) const {
+            return merge(a,b);
+        }
+    };
+
+    friend __global__ void bvh_rebuild(bvh_tree &obj);
+    friend __global__ void initialize_info(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void aabb_init(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void aabb_obj_init(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void aabb_reduce(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void aabb_reduce_serial(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void morton_code(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void morton_code_sort(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void morton_code_sort_serial(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void morton_code_extend(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void morton_code_extend_serial(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void node_init(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void construct_internal_nodes(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void set_parent(bvh_tree** obj_ptr,info *inited_info);
+    friend __global__ void set_parent_serial(bvh_tree** obj_ptr,info *inited_info);
 
 private:
     int count{0};
@@ -334,5 +377,215 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
     delete[] flags;
     delete[] parent_ids;
 }
+
+__global__ inline void initialize_info(bvh_tree** obj_ptr,bvh_tree::info *inited_info){
+        auto& obj = **obj_ptr;
+        inited_info->num_internal_nodes = obj.count - 1;
+
+        inited_info->d_temp_storage_reduce1 = nullptr;
+        inited_info->temp_storage_bytes_reduce1 = 0;
+        inited_info->reduce_out1 = new aabb[1];
+        bvh_tree::aabb_merge aabb_merge_op;
+        cub::DeviceReduce::Reduce(inited_info->d_temp_storage_reduce1,inited_info->temp_storage_bytes_reduce1,
+        obj.bbox_list + inited_info->num_internal_nodes,inited_info->reduce_out1, obj.count,
+        aabb_merge_op,aabb::empty());
+        inited_info->d_temp_storage_reduce1 = new uint8_t[inited_info->temp_storage_bytes_reduce1];
+
+        inited_info->morton = new unsigned int[obj.count];
+
+        inited_info->morton_sorted = new unsigned int[obj.count];
+
+        inited_info->primitive_list_sorted = new hittable* [obj.count];
+
+        inited_info->d_temp_storage_sort = nullptr;
+        inited_info->temp_storage_bytes_sort = 0;
+        cub::DeviceRadixSort::SortPairs(inited_info->d_temp_storage_sort, inited_info->temp_storage_bytes_sort,
+            inited_info->morton, inited_info->morton_sorted,obj.primitive_list,
+            inited_info->primitive_list_sorted,obj.count);
+        inited_info->d_temp_storage_sort = new uint8_t[inited_info->temp_storage_bytes_sort];
+
+        inited_info->morton64 = new unsigned long long[obj.count];
+
+        inited_info->parent_ids = new unsigned int [obj.node_length]{0xFFFFFFFF};
+
+        inited_info->flags =  new int[obj.count]{0};
+    }
+
+__global__ inline void aabb_init(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+    for (int i=tid; i<inited_info->num_internal_nodes; i+=grid_size) {
+        obj.bbox_list[i] = aabb::empty();
+    }
+}
+
+__global__ inline void aabb_obj_init(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+    for (int i=tid; i<obj.count; i+=grid_size) {
+        obj.bbox_list[i + inited_info->num_internal_nodes] = obj.primitive_list[i]->bounding_box();
+    }
+}
+
+__global__ inline void aabb_reduce(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto &obj = **obj_ptr;
+    bvh_tree::aabb_merge aabb_merge_op;
+    cub::DeviceReduce::Reduce(inited_info->d_temp_storage_reduce1,inited_info->temp_storage_bytes_reduce1,
+        obj.bbox_list + inited_info->num_internal_nodes,inited_info->reduce_out1, obj.count,
+        aabb_merge_op,aabb::empty());
+}
+
+__global__ inline void aabb_reduce_serial(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto &obj = **obj_ptr;
+    *(inited_info->reduce_out1) = thrust::reduce(thrust::seq,
+                                           obj.bbox_list + inited_info->num_internal_nodes, obj.bbox_list + obj.node_length,
+                                           aabb::empty(),
+                                           []__device__ (const aabb &lhs, const aabb &rhs) {
+                                               return merge(lhs, rhs);
+                                           });
+}
+
+__global__ inline void morton_code(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+
+    for (int i=tid; i<obj.count; i+=grid_size) {
+        inited_info->morton[i] = mortonEncode3D(obj.primitive_list[i]->bounding_box().center(),
+            inited_info->reduce_out1->x,inited_info->reduce_out1->y,inited_info->reduce_out1->z);
+    }
+}
+
+__global__ inline void morton_code_sort(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+
+    cub::DeviceRadixSort::SortPairs(inited_info->d_temp_storage_sort, inited_info->temp_storage_bytes_sort,
+    inited_info->morton, inited_info->morton_sorted,obj.primitive_list,inited_info->primitive_list_sorted,obj.count);
+}
+
+__global__ inline void morton_code_sort_serial(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    thrust::stable_sort_by_key(thrust::seq, inited_info->morton, inited_info->morton + obj.count,
+                               thrust::make_zip_iterator(
+                               thrust::make_tuple(obj.bbox_list + inited_info->num_internal_nodes, obj.primitive_list)));
+}
+
+__global__ inline void morton_code_extend(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+
+    for (int i=tid; i<obj.count; i+=grid_size) {
+        inited_info->morton[i] = inited_info->morton_sorted[i];
+        obj.primitive_list[i] = inited_info->primitive_list_sorted[i];
+        obj.bbox_list[i + inited_info->num_internal_nodes] = obj.primitive_list[i]->bounding_box();
+        inited_info->morton64[i] = static_cast<unsigned long long>(inited_info->morton[i])<<32;
+        inited_info->morton64[i] |= i;
+    }
+}
+
+__global__ inline void morton_code_extend_serial(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+
+    for (int i=tid; i<obj.count; i+=grid_size) {
+        inited_info->morton64[i] = static_cast<unsigned long long>(inited_info->morton[i])<<32;
+        inited_info->morton64[i] |= i;
+    }
+}
+
+__global__ inline void node_init(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+
+    for (int i=tid; i<obj.node_length; i+=grid_size) {
+        obj.leaf_list[i] = {
+            .left = 0xFFFFFFFF,
+            .right = 0xFFFFFFFF
+        };
+    }
+}
+
+__global__ inline void construct_internal_nodes(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+
+    for (int i=tid; i<obj.count - 1; i+=grid_size) {
+        obj.leaf_list[i] = bvh_tree::find_child(inited_info->morton64,obj.count,i);
+        inited_info->parent_ids[obj.leaf_list[i].left] = i;
+        inited_info->parent_ids[obj.leaf_list[i].right] = i;
+        //printf("index: %d left:%u right:%u\n", i,obj.leaf_list[i].left,obj.leaf_list[i].right);
+    }
+}
+
+__global__ inline void set_parent(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+    for (int i=tid; i<obj.count ; i+=grid_size) {
+        unsigned int parent = inited_info->parent_ids[i + inited_info->num_internal_nodes];
+        while(parent != 0xFFFFFFFF) {
+            //lock in cuda
+            const int old = atomicCAS(inited_info->flags + parent, 0, 1);
+            if (old == 0) {
+                // this is the first thread entered here.
+                // wait the other thread from the other child node.
+                break;
+                //return;
+            }
+            //assert(old == 1);
+            // here, the flag has already been 1. it means that this
+            // thread is the 2nd thread. merge AABB of both children.
+
+            const auto lidx = obj.leaf_list[parent].left;
+            const auto ridx = obj.leaf_list[parent].right;
+            const auto lbox = obj.bbox_list[lidx];
+            const auto rbox = obj.bbox_list[ridx];
+            obj.bbox_list[parent] = merge(lbox, rbox);
+            //printf("parent %i left %i lbox %f rbox %f\n", parent,obj.leaf_list[parent].left, obj.bbox_list[lidx].x.centre(), obj.bbox_list[ridx].x.centre());
+            // look the next parent...
+            parent = inited_info->parent_ids[parent];
+        }
+    }
+}
+
+__global__ inline void set_parent_serial(bvh_tree** obj_ptr,bvh_tree::info *inited_info) {
+    auto& obj = **obj_ptr;
+    const auto tid = utils::getTId();
+    const auto grid_size = utils::getGrid();
+    for (int i=tid; i<obj.count; i+=grid_size) {
+        unsigned int parent = inited_info->parent_ids[i + inited_info->num_internal_nodes];
+        while(parent != 0xFFFFFFFF) {
+            //lock in cuda
+            //const int old = atomicCAS(inited_info->flags + parent, 0, 1);
+            //if (old == 0) {
+            if(*(inited_info->flags + parent) == 0){
+                *(inited_info->flags + parent) = 1;
+                // this is the first thread entered here.
+                // wait the other thread from the other child node.
+                break;
+                //return;
+            }
+            //assert(old == 1);
+            // here, the flag has already been 1. it means that this
+            // thread is the 2nd thread. merge AABB of both children.
+
+            const auto lidx = obj.leaf_list[parent].left;
+            const auto ridx = obj.leaf_list[parent].right;
+            const auto lbox = obj.bbox_list[lidx];
+            const auto rbox = obj.bbox_list[ridx];
+            obj.bbox_list[parent] = merge(lbox, rbox);
+            //printf("parent %i left %i lbox %f rbox %f\n", parent,obj.leaf_list[parent].left, obj.bbox_list[lidx].x.centre(), obj.bbox_list[ridx].x.centre());
+            // look the next parent...
+            parent = inited_info->parent_ids[parent];
+        }
+    }
+}
+
 
 #endif BVH_H
