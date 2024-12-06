@@ -13,6 +13,10 @@
 #include <semaphore>
 #include <string>
 #include <thread>
+#define WIN32_LEAN_AND_MEAN
+#include "windows.h"
+#undef min
+#undef max
 #include "sdl_wrapper.hpp"
 #include "rtweekend.h"
 
@@ -140,6 +144,10 @@ hittable_list final_scene_build() {
     auto lambertian_emat_sphere_1 = new sphere(point3(400, 200, 400), 100, lambertian_emat);
     world.add(lambertian_emat_sphere_1);
 
+    auto metal_gold = new metal(color(212.0f/256, 175.0f/256, 55.0f/256), 0.025);
+    auto gold_sphere = new sphere{point3(240, 320, 400), 60, metal_gold};
+    world.add(gold_sphere);
+
     hittable_list boxes2;
     auto white = new lambertian(color(.73, .73, .73));
     int ns = 1000;
@@ -233,7 +241,9 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
     }}.detach();
     mainRendererComm.frame_start_render.release();
     auto t0 = std::chrono::steady_clock::now();
-    while (!want_exit_sdl())
+    auto frames = 0;
+    double total_time = 0.0;
+    while (!want_exit_sdl() && frames < 62)
     {
         if (mainRendererComm.frame_rendered.try_acquire_for(std::chrono::milliseconds{5})) {
             auto texture = sdl_raii::Texture{renderer.get(), surface.get()};
@@ -241,7 +251,9 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
             SDL_RenderCopy(renderer.get(),texture.get(), nullptr, nullptr);
             SDL_RenderPresent(renderer.get());
             auto frame_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-t0);
+            total_time += frame_time.count()/1e3;
             utils::log("Frame time: "+std::to_string(frame_time.count()/1e3)+" ms");
+            frames += 1;
             mainRendererComm.frame_start_render.release();
             t0 = std::chrono::steady_clock::now();
         }
@@ -251,18 +263,41 @@ void render_scene_realtime(hittable_list &scene, camera &cam) {
         want_exit_sdl();
     }
     render_finished_future.wait();
+    utils::log("Avg frame time: "+std::to_string(total_time/frames)+" ms");
 }
 
+void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame, int& threads) {
+    for (int i = 1; i < argc; i += 2) {
+        if (std::string(argv[i]) == "--size") {
+            size = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--samples") {
+            samples = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--depth") {
+            depth = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--frame") {
+            frame = std::atoi(argv[i + 1]);
+        } else if (std::string(argv[i]) == "--thread") {
+            threads = std::atoi(argv[i + 1]);
+        } else {
+            std::cerr << "Usage: " << argv[0]
+                << " --size <int> --depth <int> --samples <int> --thread <int>\n\n"
+                   "       --size: width of image in px\n"
+                   "       --depth: maximum depth for rays\n"
+                   "       --samples: number of samples per pixel\n"
+                   "       --thread: number of threads\n" << std::endl;
+        }
+    }
+}
 
 int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
+    int size = 512, samples = 32, depth = 4, frame = 62, threads = std::thread::hardware_concurrency();
+    parse_arguments(argc, argv, size, samples, depth, frame, threads);
     initialize_main_sync_objs();
-    auto scene = debug_scene_build();
-    auto cam = final_camera(400, 50, 4);
-    if (argc!=1) {
-        render_scene(scene, cam);
-    } else {
-        render_scene_realtime(scene, cam);
-    }
+    auto scene = final_scene_build();
+    auto cam = final_camera(size, samples, depth);
+    utils::log("Threads: "+std::to_string(threads));
+    cam.num_thread = threads;
+    render_scene_realtime(scene, cam);
     return 0;
 }

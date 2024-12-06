@@ -28,6 +28,7 @@ class camera {
     point3 lookfrom = point3(0,0,0);   // Point camera is looking from
     point3 lookat   = point3(0,0,-1);  // Point camera is looking at
     vec3   vup      = vec3(0,1,0);     // Camera-relative "up" direction
+    int num_thread = 8;
 
     float focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
@@ -73,16 +74,22 @@ class camera {
 
     void render_parallel(const hittable& world, std::span<unsigned int> image) {
         initialize();
-        int num_threads = std::thread::hardware_concurrency();
+        const auto r = lookfrom-lookat;
+        const auto tan_v = -normalize(cross(r, vup));
+        constexpr auto dtheta = 0.1f;
+        lookfrom += tan_v*length(r)*sinf(dtheta)-r*(1.0f-cosf(dtheta));
+        const int hw_threads = std::thread::hardware_concurrency();
+        //const int num_threads = 8;
         std::vector<std::thread> threads{};
-        for (auto tId = 0; tId < num_threads; tId++) {
+        for (auto tId = 0; tId < num_thread; tId++) {
             threads.emplace_back([=, &image, &world]() {
-                for (int j = tId; j < image_height; j+=num_threads) {
+                for (int j = tId; j < image_height; j+=num_thread) {
                     for (int i = 0; i < image_width; i++) {
                         image[i+j*image_width] = render_pixel(world, j, i);
                     }
                 }
             });
+            SetThreadAffinityMask(threads.back().native_handle(), DWORD_PTR(1) << (tId*std::max(1, hw_threads/num_thread))%hw_threads);
         }
         for (auto& t : threads) {
             t.join();
