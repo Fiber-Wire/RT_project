@@ -58,7 +58,7 @@ class bvh_builder {
 
     __host__ void update() const {
         constexpr auto block_size = 128;
-        auto grid_size = std::min(std::max(num/block_size, 1), 128);
+        auto grid_size = std::max(num/block_size, 1);
         float ms; // elapsed time in milliseconds
         cudaEvent_t startEvent, stopEvent;
         utils::cu_ensure(cudaEventCreate(&startEvent));

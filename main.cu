@@ -219,7 +219,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = 62, obj_num = 1000, parallel_build = 1;
+    int size = 512, samples = 32, depth = 4, frame = 62, obj_num = 1000, parallel_build = 1;
     parse_arguments(argc, argv, size, samples, depth, frame, obj_num, parallel_build);
     GRIDDIMS.x = size/BLOCKDIMS.y;
     GRIDDIMS.y = size/BLOCKDIMS.z;
