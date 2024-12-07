@@ -134,7 +134,7 @@ private:
 
     ///https://research.nvidia.com/sites/default/files/publications/karras2012hpg_paper.pdf
     __device__ static bvh_node find_child(const unsigned long long *object_mortons,
-                                            const unsigned int num_objects, const unsigned int node_idx) {
+                                          const unsigned int num_objects, const unsigned int node_idx) {
         unsigned int jdx;
         int l = num_objects - 1;
         int d = 1;
@@ -143,8 +143,7 @@ private:
 
         if (node_idx == 0) {
             jdx = num_objects - 1;
-        }
-        else {
+        } else {
             // determine direction of the range
             const int L_delta = common_upper_bits(self_code, object_mortons[node_idx - 1]);
             const int R_delta = common_upper_bits(self_code, object_mortons[node_idx + 1]);
@@ -184,7 +183,7 @@ private:
         }
 
         //binary find split gamma
-        t = (l + 1)/2;
+        t = (l + 1) / 2;
         l = 0;
         delta_min = common_upper_bits(self_code, object_mortons[jdx]);
         while (t > 1) {
@@ -196,7 +195,7 @@ private:
             if (delta > delta_min) {
                 l += t;
             }
-            t = (t + 1)/2;
+            t = (t + 1) / 2;
         }
 
         i_tmp = node_idx + (l + t) * d;
@@ -208,10 +207,10 @@ private:
             l += t;
         }
 
-        const int gamma = node_idx + l * d + min(d,0);
+        const int gamma = node_idx + l * d + min(d, 0);
 
         unsigned int left = gamma;
-        if(min(node_idx, jdx) == gamma) left += num_objects - 1;
+        if (min(node_idx, jdx) == gamma) left += num_objects - 1;
         unsigned int right = gamma + 1;
         if (max(node_idx, jdx) == gamma + 1) right += num_objects - 1;
 
@@ -219,7 +218,7 @@ private:
     }
 
     __device__ static void construct_internal_nodes(bvh_node *internal_nodes, const unsigned long long *object_mortons,
-                                             unsigned int *parent_ids, const unsigned int num_objects) {
+                                                    unsigned int *parent_ids, const unsigned int num_objects) {
         thrust::for_each(thrust::device,
                          thrust::make_counting_iterator<unsigned int>(0),
                          // number of internal nodes is one less than num_objects
@@ -273,7 +272,7 @@ __global__ inline void bvh_rebuild(bvh_tree &obj) {
     //extend mortonCode from 32 to 64  64 = morton obj_id
     const auto morton64 = new unsigned long long int[obj.count];
     thrust::transform(thrust::device, morton, morton + obj.count,
-                            thrust::make_counting_iterator<unsigned int>(0), morton64,
+                      thrust::make_counting_iterator<unsigned int>(0), morton64,
                       [] __device__ (const unsigned int m, const unsigned int idx) {
                           unsigned long long int m64 = m;
                           m64 <<= 32;
