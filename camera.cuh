@@ -223,12 +223,13 @@ __device__ void render_pixel_block(const int row_id, const int col_id,
 
             ray_counter++;
         }
-        const auto bound = block_comms->find_ray_bounds(local_rays);
-        // printf("Block {%d, %d} Thread (%d, %d, %d): bound for dx (%f, %f)\n",
-        //     blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
-        //     bound.dx.min, bound.dx.max);
-        block_comms->block_morton_sort(local_rays, bound);
-
+        if constexpr (use_reordering) {
+            const auto bound = block_comms->find_ray_bounds(local_rays);
+            // printf("Block {%d, %d} Thread (%d, %d, %d): bound for dx (%f, %f)\n",
+            //     blockIdx.x, blockIdx.y, threadIdx.x, threadIdx.y, threadIdx.z,
+            //     bound.dx.min, bound.dx.max);
+            block_comms->block_morton_sort(local_rays, bound);
+        }
 
         for (auto &r_info : local_rays) {
             if (r_info.is_valid_ray()) {

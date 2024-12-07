@@ -15,13 +15,24 @@
 
 constexpr float infinity = std::numeric_limits<float>::infinity();
 constexpr float pi = 3.1415926535897932385;
-constexpr int width_t = 400;
-constexpr int height_t = 400;
+// Modify the following values to change run config
+// Horizontal resolution
+constexpr int width_t = 512;
+// Vertical resolution
+constexpr int height_t = 512;
+// Rays sampled per pixel
 constexpr int samplePPx_t = 32;
+// Length of thread-local ray array
 constexpr int numRays_t = 2;
+// blockDims.x
 constexpr int blkx_t = 2;
+// blockDims.y
 constexpr int blky_t = 4;
+// blockDims.z
 constexpr int blkz_t = 4;
+// Toggle for ray reordering
+constexpr bool use_reordering = true;
+// DO NOT MODIFY
 constexpr int grdx_t = width_t/blky_t;
 constexpr int grdy_t = height_t/blkz_t;
 

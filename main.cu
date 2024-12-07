@@ -280,20 +280,14 @@ __global__ void initCurand(curandState *state, unsigned long seed){
 
 void parse_arguments(int argc, char** argv, int& size, int& samples, int& depth, int& frame) {
     for (int i = 1; i < argc; i += 2) {
-        if (std::string(argv[i]) == "--size") {
-            size = std::atoi(argv[i + 1]);
-        } else if (std::string(argv[i]) == "--samples") {
-            samples = std::atoi(argv[i + 1]);
-        } else if (std::string(argv[i]) == "--depth") {
+        if (std::string(argv[i]) == "--depth") {
             depth = std::atoi(argv[i + 1]);
         } else if (std::string(argv[i]) == "--frame") {
             frame = std::atoi(argv[i + 1]);
         } else {
             std::cerr << "Usage: " << argv[0]
-                << " --size <int> --depth <int> --samples <int> --device <string>\n\n"
-                   "       --size: width of image in px\n"
+                << "--depth <int> --frame <int>\n\n"
                    "       --depth: maximum depth for rays\n"
-                   "       --samples: number of samples per pixel\n"
                    "       --frame: non-stop when set to negative\n" << std::endl;
         }
     }
@@ -303,7 +297,7 @@ int main(int argc, char* argv[]) {
     sdl_raii::SDL sdl{};
     initialize_main_sync_objs();
 
-    int size = 400, samples = 32, depth = 4, frame = 62;
+    int size = 512, samples = 32, depth = 4, frame = 62;
     parse_arguments(argc, argv, size, samples, depth, frame);
     size = width_t; samples = samplePPx_t;
     GRIDDIMS.x = size/BLOCKDIMS.y;
