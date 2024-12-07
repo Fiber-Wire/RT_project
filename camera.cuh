@@ -8,20 +8,20 @@
 
 
 class camera {
-  public:
+public:
     const bvh_tree *world;
-    float aspect_ratio      = 1.0;  // Ratio of image width over height
-    int    image_width       = 100;  // Rendered image width in pixel count
-    int    samples_per_pixel = 10;   // Count of random samples for each pixel
-    int    max_depth         = 10;   // Maximum number of ray bounces into scene
-    color  background;               // Scene background color
+    float aspect_ratio = 1.0; // Ratio of image width over height
+    int image_width = 100; // Rendered image width in pixel count
+    int samples_per_pixel = 10; // Count of random samples for each pixel
+    int max_depth = 10; // Maximum number of ray bounces into scene
+    color background; // Scene background color
 
-    float vfov     = 90;              // Vertical view angle (field of view)
-    point3 lookfrom = point3(0,0,0);   // Point camera is looking from
-    point3 lookat   = point3(0,0,-1);  // Point camera is looking at
-    vec3   vup      = vec3(0,1,0);     // Camera-relative "up" direction
+    float vfov = 90; // Vertical view angle (field of view)
+    point3 lookfrom = point3(0, 0, 0); // Point camera is looking from
+    point3 lookat = point3(0, 0, -1); // Point camera is looking at
+    vec3 vup = vec3(0, 1, 0); // Camera-relative "up" direction
 
-    float focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
+    float focus_dist = 10; // Distance from camera lookfrom point to plane of perfect focus
 
     void render() {
         initialize();
@@ -31,7 +31,7 @@ class camera {
         for (int j = 0; j < image_height; j++) {
             std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
             for (int i = 0; i < image_width; i++) {
-                color pixel_color(0,0,0);
+                color pixel_color(0, 0, 0);
                 for (int sample = 0; sample < samples_per_pixel; sample++) {
                     ray r = get_ray(i, j, nullptr);
                     pixel_color += ray_color(r, max_depth, nullptr);
@@ -44,7 +44,7 @@ class camera {
     }
 
     __host__ __device__ unsigned int render_pixel(int row_id, int col_id, curandState *rnd) const {
-        color pixel_color(0,0,0);
+        color pixel_color(0, 0, 0);
         for (int sample = 0; sample < samples_per_pixel; sample++) {
             ray r = get_ray(col_id, row_id, rnd);
             pixel_color += ray_color(r, max_depth, rnd);
@@ -52,27 +52,30 @@ class camera {
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
-    template <int thread_per_pixel>
+    template<int thread_per_pixel>
     __device__ unsigned int render_pixel(const int row_id, const int col_id, curandState *rnd,
                                          const int thread_index) const {
-        color pixel_color(0,0,0);
-        for (int sample = thread_index; sample < samples_per_pixel; sample+=thread_per_pixel) {
+        color pixel_color(0, 0, 0);
+        for (int sample = thread_index; sample < samples_per_pixel; sample += thread_per_pixel) {
             ray r = get_ray(col_id, row_id, rnd);
             pixel_color += ray_color(r, max_depth, rnd);
         }
         __syncwarp();
-        for (int shfl_dist = thread_per_pixel/2; shfl_dist>0; shfl_dist/=2) {
-            pixel_color.x += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.x, shfl_dist);
-            pixel_color.y += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.y, shfl_dist);
-            pixel_color.z += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.z, shfl_dist);
+        for (int shfl_dist = thread_per_pixel / 2; shfl_dist > 0; shfl_dist /= 2) {
+            pixel_color.x += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.x,
+                                             shfl_dist);
+            pixel_color.y += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.y,
+                                             shfl_dist);
+            pixel_color.z += __shfl_xor_sync(utils::tId_to_warp_mask<thread_per_pixel>(threadIdx.x), pixel_color.z,
+                                             shfl_dist);
         }
         return pixel_from_color(pixel_samples_scale * pixel_color);
     }
 
-    template <int thread_per_pixel>
+    template<int thread_per_pixel>
     __device__ color render_pixel_block(const int row_id, const int col_id, curandState *rnd) const {
-        color pixel_color(0,0,0);
-        for (int sample = 0; sample < samples_per_pixel/thread_per_pixel; sample++) {
+        color pixel_color(0, 0, 0);
+        for (int sample = 0; sample < samples_per_pixel / thread_per_pixel; sample++) {
             ray r = get_ray(col_id, row_id, rnd);
             pixel_color += ray_color(r, max_depth, rnd);
         }
@@ -86,7 +89,7 @@ class camera {
             utils::log<utils::LogLevel::eVerbose>(
                 std::string{"Scanlines remaining: "} + std::to_string(image_height - j));
             for (int i = 0; i < image_width; i++) {
-                image[i+j*image_width] = render_pixel( j, i, nullptr);
+                image[i + j * image_width] = render_pixel(j, i, nullptr);
             }
         }
     }
@@ -97,17 +100,18 @@ class camera {
         std::vector<std::thread> threads{};
         for (auto tId = 0; tId < num_threads; tId++) {
             threads.emplace_back([tId, num_threads, this, &image]() {
-                for (int j = tId; j < image_height; j+=num_threads) {
+                for (int j = tId; j < image_height; j += num_threads) {
                     for (int i = 0; i < image_width; i++) {
-                        image[i+j*image_width] = render_pixel(j, i, nullptr);
+                        image[i + j * image_width] = render_pixel(j, i, nullptr);
                     }
                 }
             });
         }
-        for (auto& t : threads) {
+        for (auto &t: threads) {
             t.join();
         }
     }
+
     __host__ __device__ void initialize() {
         image_height = static_cast<int>(image_width / aspect_ratio);
         image_height = (image_height < 1) ? 1 : image_height;
@@ -118,9 +122,9 @@ class camera {
 
         // Determine viewport dimensions.
         const auto theta = degrees_to_radians(vfov);
-        const auto h = std::tan(theta/2);
+        const auto h = std::tan(theta / 2);
         const auto viewport_height = 2 * h * focus_dist;
-        const auto viewport_width = viewport_height * (static_cast<float>(image_width)/image_height);
+        const auto viewport_width = viewport_height * (static_cast<float>(image_width) / image_height);
 
         // Calculate the u,v,w unit basis vectors for the camera coordinate frame.
         w = unit_vector(lookfrom - lookat);
@@ -128,32 +132,29 @@ class camera {
         v = cross(w, u);
 
         // Calculate the vectors across the horizontal and down the vertical viewport edges.
-        const vec3 viewport_u = viewport_width * u;    // Vector across viewport horizontal edge
-        const vec3 viewport_v = viewport_height * -v;  // Vector down viewport vertical edge
+        const vec3 viewport_u = viewport_width * u; // Vector across viewport horizontal edge
+        const vec3 viewport_v = viewport_height * -v; // Vector down viewport vertical edge
 
         // Calculate the horizontal and vertical delta vectors from pixel to pixel.
         pixel_delta_u = viewport_u / static_cast<float>(image_width);
         pixel_delta_v = viewport_v / static_cast<float>(image_height);
 
         // Calculate the location of the upper left pixel.
-        const auto viewport_upper_left = center - (focus_dist * w) - viewport_u/2.0f - viewport_v/2.0f;
+        const auto viewport_upper_left = center - (focus_dist * w) - viewport_u / 2.0f - viewport_v / 2.0f;
         pixel00_loc = viewport_upper_left + 0.5f * (pixel_delta_u + pixel_delta_v);
-
     }
 
-
-  private:
-    int    image_height;         // Rendered image height
-    float pixel_samples_scale;  // Color scale factor for a sum of pixel samples
-    point3 center;               // Camera center
-    point3 pixel00_loc;          // Location of pixel 0, 0
-    vec3   pixel_delta_u;        // Offset to pixel to the right
-    vec3   pixel_delta_v;        // Offset to pixel below
-    vec3   u, v, w;              // Camera frame basis vectors
-
+private:
+    int image_height; // Rendered image height
+    float pixel_samples_scale; // Color scale factor for a sum of pixel samples
+    point3 center; // Camera center
+    point3 pixel00_loc; // Location of pixel 0, 0
+    vec3 pixel_delta_u; // Offset to pixel to the right
+    vec3 pixel_delta_v; // Offset to pixel below
+    vec3 u, v, w; // Camera frame basis vectors
 
 
-    __host__ __device__ ray get_ray(const int col_id, const int row_id, curandState* rnd) const {
+    __host__ __device__ ray get_ray(const int col_id, const int row_id, curandState *rnd) const {
         // Construct a camera ray originating from the defocus disk and directed at a randomly
         // sampled point around the pixel location i, j.
 
@@ -168,7 +169,7 @@ class camera {
         return ray(ray_origin, ray_direction);
     }
 
-    __host__ __device__ static vec3 sample_square(curandState* rnd) {
+    __host__ __device__ static vec3 sample_square(curandState *rnd) {
         // Returns the vector to a random point in the [-.5,-.5]-[+.5,+.5] unit square.
         return vec3(random_float(rnd) - 0.5f, random_float(rnd) - 0.5f, 0.0f);
     }
@@ -199,10 +200,10 @@ class camera {
         return std::make_tuple(end, attenuation);
     }
 
-    __host__ __device__ color ray_color(const ray& r, int depth, curandState* rnd) const {
+    __host__ __device__ color ray_color(const ray &r, int depth, curandState *rnd) const {
         ray cur_ray = r;
-        auto cur_attenuation = vec3(1.0f,1.0f,1.0f);
-        bool end=false;
+        auto cur_attenuation = vec3(1.0f, 1.0f, 1.0f);
+        bool end = false;
         while (depth > 0 && !end) {
             vec3 attenuation;
             depth -= 1;
@@ -210,7 +211,7 @@ class camera {
             cur_attenuation *= attenuation;
         }
         // If we've exceeded the ray bounce limit, no more light is gathered.
-        return end ? cur_attenuation : color(0,0,0);
+        return end ? cur_attenuation : color(0, 0, 0);
     }
 };
 
